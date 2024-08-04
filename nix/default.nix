@@ -5,7 +5,7 @@ let
   nixpkgs-src = builtins.fetchTarball {
     # nixpkgs-unstable as of 2024-08-04
     url = "https://github.com/NixOS/nixpkgs/archive/81610abc161d4021b29199aa464d6a1a521e0cc9.tar.gz";
-    sha256 = "190mb6my29q3gfmcnq64qgw26hkfvdbxwq8929268l3q0qj73ppw";
+    sha256 = "19j550srrsmsfzz0arfva1n13kjdz5yiz3x2ss3mgpaxacny7iad";
 
     # # nixos-24.05 as of 2024-07-08
     # url = "https://github.com/NixOS/nixpkgs/archive/49ee0e94463abada1de470c9c07bfc12b36dcf40.tar.gz";
