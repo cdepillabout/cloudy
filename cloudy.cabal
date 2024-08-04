@@ -1,0 +1,93 @@
+cabal-version:       3.4
+
+name:                cloudy
+version:             0.1.0.0
+synopsis:            CLI tool to easily spin up and control compute instances in various cloud environments
+-- description:         CLI tool
+homepage:            https://github.com/cdepillabout/cloudy
+license:             BSD-3-Clause
+license-file:        LICENSE
+author:              Dennis Gosnell
+maintainer:          cdep.illabout@gmail.com
+copyright:           2024-2024 Dennis Gosnell
+category:            Productivity
+build-type:          Custom
+extra-source-files:  README.md
+                   , default.nix
+                   , shell.nix
+                   , nix/default.nix
+                   , nix/overlay.nix
+
+custom-setup
+                   -- Hackage apparently gives an error if you don't specify an
+                   -- upper bound on your setup-depends. But I don't want to
+                   -- have to remember to bump the upper bound of each of these
+                   -- setup depends every time I want to make a release of cloudy,
+                   -- especially sense I already have upper bounds on important things
+                   -- like base below.
+  setup-depends:     base <999
+                   , cabal-doctest >=1.0.2 && <1.1
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Cloudy
+  build-depends:       base
+                     , aeson
+                     , bytestring
+                     , directory
+                     , filepath
+                     , http-client-tls
+                     , network-bsd
+                     , optparse-applicative
+                     , random
+                     , servant
+                     , servant-client
+                     , sqlite-simple
+                     , text
+                     , time
+                     , uuid
+                     , yaml
+  ghc-options:         -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates
+  default-extensions:  DataKinds
+                       DeriveDataTypeable
+                       DeriveGeneric
+                       DerivingStrategies
+                       DuplicateRecordFields
+                       GeneralizedNewtypeDeriving
+                       LambdaCase
+                       NamedFieldPuns
+                       NumericUnderscores
+                       OverloadedLabels
+                       OverloadedStrings
+                       QuasiQuotes
+                       RecordWildCards
+                       ScopedTypeVariables
+                       TupleSections
+                       TypeApplications
+                       TypeOperators
+  other-extensions:    DeriveAnyClass
+                       -- TemplateHaskell
+                       -- UndecidableInstances
+
+executable cloudy
+  main-is:             Main.hs
+  hs-source-dirs:      app
+  build-depends:       base
+                     , cloudy
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+
+test-suite doctests
+  type:                exitcode-stdio-1.0
+  main-is:             DocTest.hs
+  hs-source-dirs:      test
+  build-depends:       base
+                     , doctest
+                     , QuickCheck
+                     , template-haskell
+                     , cloudy
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+
+source-repository head
+  type:     git
+  location: git@github.com:cdepillabout/cloudy.git

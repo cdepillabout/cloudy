@@ -1,0 +1,7 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:cloudy"
+
+    - path: "app/Main.hs"
+      component: "cloudy:exe:cloudy"
