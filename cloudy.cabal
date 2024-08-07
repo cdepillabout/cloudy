@@ -31,6 +31,13 @@ custom-setup
 library
   hs-source-dirs:      src
   exposed-modules:     Cloudy
+                       Cloudy.Cli
+                       Cloudy.Cli.CreateAws
+                       Cloudy.Cli.CreateScaleway
+                       Cloudy.Cmd.Create
+                       Cloudy.Cmd.List
+                       Cloudy.Cmd.Ssh
+                       Cloudy.Cmd.Destroy
   build-depends:       base
                      , aeson
                      , bytestring
