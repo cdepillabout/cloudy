@@ -38,17 +38,21 @@ library
                        Cloudy.Cmd.List
                        Cloudy.Cmd.Ssh
                        Cloudy.Cmd.Destroy
+                       Cloudy.Scaleway
   build-depends:       base
                      , aeson
                      , bytestring
+                     , containers
                      , directory
                      , filepath
+                     , http-api-data
                      , http-client-tls
                      , network-bsd
                      , optparse-applicative
                      , random
                      , servant
                      , servant-client
+                     , servant-client-core
                      , sqlite-simple
                      , text
                      , time
@@ -61,6 +65,7 @@ library
                        DerivingStrategies
                        DuplicateRecordFields
                        GeneralizedNewtypeDeriving
+                       InstanceSigs
                        LambdaCase
                        NamedFieldPuns
                        NumericUnderscores

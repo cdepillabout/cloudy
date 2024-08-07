@@ -2,6 +2,7 @@
 module Cloudy.Cmd.Create where
 
 import Cloudy.Cli (CreateCliOpts (..), AwsCliOpts (..), ScalewayCliOpts (..))
+import Cloudy.Scaleway (ipsPostApi)
 
 runCreate :: CreateCliOpts -> IO ()
 runCreate = \case
@@ -12,4 +13,4 @@ runCreateAws :: AwsCliOpts -> IO ()
 runCreateAws awsOpts = undefined
 
 runCreateScaleway :: ScalewayCliOpts -> IO ()
-runCreateScaleway scalewayOpts =
+runCreateScaleway scalewayOpts = undefined
