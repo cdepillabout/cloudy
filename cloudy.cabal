@@ -76,6 +76,7 @@ library
                        ScopedTypeVariables
                        TupleSections
                        TypeApplications
+                       TypeFamilies
                        TypeOperators
   other-extensions:    DeriveAnyClass
                        -- TemplateHaskell
