@@ -66,6 +66,7 @@
 - ignore: {name: "Use infix"}
 - ignore: {name: "Use join"}
 - ignore: {name: "Use uncurry"}
+- ignore: {name: "Use newtype instead of data"}
 
 
 

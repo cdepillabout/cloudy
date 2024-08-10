@@ -2,6 +2,7 @@
 module Cloudy.Cmd.Ssh where
 
 import Cloudy.Cli (SshCliOpts (..))
+import Cloudy.LocalConfFile (LocalConfFileOpts)
 
-runSsh :: SshCliOpts -> IO ()
-runSsh opts = pure ()
+runSsh :: LocalConfFileOpts -> SshCliOpts -> IO ()
+runSsh localConfFileOpts opts = pure ()

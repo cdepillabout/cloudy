@@ -2,6 +2,7 @@
 module Cloudy.Cmd.Destroy where
 
 import Cloudy.Cli (DestroyCliOpts (..))
+import Cloudy.LocalConfFile (LocalConfFileOpts)
 
-runDestroy :: DestroyCliOpts -> IO ()
-runDestroy opts = pure ()
+runDestroy :: LocalConfFileOpts -> DestroyCliOpts -> IO ()
+runDestroy localConfFileOpts opts = pure ()

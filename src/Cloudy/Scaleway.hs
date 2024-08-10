@@ -12,18 +12,6 @@ import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
 import Data.Aeson.Types (Parser)
 
-
--- curl 'https://api.scaleway.com/instance/v1/zones/nl-ams-1/servers'\
---   -X POST\
---     -H 'Accept: application/json'\
---       -H 'Content-Type: application/json; charset=utf-8'\
---         -H 'x-session-token: ey...'\
---           --data-raw '...'
-
--- type API = "position" :> Capture "x" Int :> Capture "y" Int :> Get '[JSON] Position
---       :<|> "hello" :> QueryParam "name" String :> Get '[JSON] HelloMessage
---             :<|> "marketing" :> ReqBody '[JSON] ClientInfo :> Post '[JSON] Email
-
 data Zone = NL1 | NL2 | NL3
   deriving (Eq, Show)
 

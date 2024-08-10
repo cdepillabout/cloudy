@@ -2,6 +2,7 @@
 module Cloudy.Cmd.List where
 
 import Cloudy.Cli (ListCliOpts (..))
+import Cloudy.LocalConfFile (LocalConfFileOpts)
 
-runList :: ListCliOpts -> IO ()
-runList opts = pure ()
+runList :: LocalConfFileOpts -> ListCliOpts -> IO ()
+runList localConfFileOpts opts = pure ()

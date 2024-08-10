@@ -5,12 +5,14 @@ import Cloudy.Cmd.Create (runCreate)
 import Cloudy.Cmd.List (runList)
 import Cloudy.Cmd.Ssh (runSsh)
 import Cloudy.Cmd.Destroy (runDestroy)
+import Cloudy.LocalConfFile (readLocalConfFile)
 
 defaultMain :: IO ()
 defaultMain = do
   cmd <- parseCliOpts
+  localConfFileOpts <- readLocalConfFile
   case cmd of
-    Create createOpts -> runCreate createOpts
-    List listOpts -> runList listOpts
-    Ssh sshOpts -> runSsh sshOpts
-    Destroy destroyOpts -> runDestroy destroyOpts
+    Create createOpts -> runCreate localConfFileOpts createOpts
+    List listOpts -> runList localConfFileOpts listOpts
+    Ssh sshOpts -> runSsh localConfFileOpts sshOpts
+    Destroy destroyOpts -> runDestroy localConfFileOpts destroyOpts

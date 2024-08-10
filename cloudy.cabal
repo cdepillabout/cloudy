@@ -35,9 +35,11 @@ library
                        Cloudy.Cli.CreateAws
                        Cloudy.Cli.CreateScaleway
                        Cloudy.Cmd.Create
+                       Cloudy.Cmd.Create.Scaleway
                        Cloudy.Cmd.List
                        Cloudy.Cmd.Ssh
                        Cloudy.Cmd.Destroy
+                       Cloudy.LocalConfFile
                        Cloudy.Scaleway
   build-depends:       base
                      , aeson
@@ -79,6 +81,7 @@ library
                        TypeFamilies
                        TypeOperators
   other-extensions:    DeriveAnyClass
+                       OverloadedRecordDot
                        -- TemplateHaskell
                        -- UndecidableInstances
 
