@@ -6,7 +6,7 @@ import Data.Aeson (ToJSON(..), object, (.=), FromJSON (..), withObject, Value, (
 import Data.Map.Strict (Map)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Servant.API ((:>), Capture, ReqBody, JSON, Post, AuthProtect, (:<|>) ((:<|>)))
+import Servant.API ((:>), Capture, ReqBody, JSON, Post, AuthProtect, (:<|>) ((:<|>)), PostCreated)
 import Servant.Client (client, ClientM)
 import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
@@ -108,7 +108,7 @@ data IpsResp = IpsResp
 instance FromJSON IpsResp where
   parseJSON :: Value -> Parser IpsResp
   parseJSON = withObject "IpsResp outer wrapper" $ \o -> do
-    innerObj <- o .: "ips"
+    innerObj <- o .: "ip"
     id_ <- innerObj .: "id"
     address <- innerObj .: "address"
     organization <- innerObj .: "organization"
@@ -156,7 +156,7 @@ instance FromJSON ServersResp where
     pure ServersResp { id = id_, name }
 
 type InstanceIpsPostApi =
-  AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "ips" :> ReqBody '[JSON] IpsReq :> Post '[JSON] IpsResp
+  AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "ips" :> ReqBody '[JSON] IpsReq :> PostCreated '[JSON] IpsResp
 
 type InstanceServersPostApi =
   AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "servers" :> ReqBody '[JSON] ServersReq :> Post '[JSON] ServersResp
