@@ -7,12 +7,12 @@ import Options.Applicative
 
 data ScalewayCliOpts = ScalewayCliOpts
   { zone :: Maybe Text
-  , commercialType :: Maybe Text
+  , instanceType :: Maybe Text
   }
   deriving stock Show
 
 scalewayCliOptsParser :: Parser ScalewayCliOpts
-scalewayCliOptsParser = ScalewayCliOpts <$> zoneParser <*> commercialTypeParser
+scalewayCliOptsParser = ScalewayCliOpts <$> zoneParser <*> instanceTypeParser
 
 zoneParser :: Parser (Maybe Text)
 zoneParser =
@@ -25,13 +25,13 @@ zoneParser =
       metavar "ZONE"
     )
 
-commercialTypeParser :: Parser (Maybe Text)
-commercialTypeParser =
+instanceTypeParser :: Parser (Maybe Text)
+instanceTypeParser =
   maybeOpt
-    "Scaleway commercial type (instance type)"
+    "Scaleway instance type (use `cloudy scaleway list-instance-types` command to get list of all instance types)"
     "PLAY2-PICO"
     strOption
-    ( long "commercial-type" <>
+    ( long "instance-type" <>
       short 'c' <>
-      metavar "COMMERCIAL_TYPE"
+      metavar "INSTANCE_TYPE"
     )
