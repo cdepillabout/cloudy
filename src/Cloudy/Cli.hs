@@ -2,7 +2,6 @@
 module Cloudy.Cli
   ( parseCliOpts
   , CliCmd(..)
-  , CreateCliOpts(..)
   , ScalewayCliOpts(..)
   , AwsCliOpts(..)
   , ListCliOpts(..)
@@ -11,20 +10,18 @@ module Cloudy.Cli
   )
   where
 
-import Cloudy.Cli.CreateAws (AwsCliOpts(..), awsCliOptsParser)
-import Cloudy.Cli.CreateScaleway (ScalewayCliOpts(..), scalewayCliOptsParser)
+import Cloudy.Cli.Aws (AwsCliOpts(..), awsCliOptsParser)
+import Cloudy.Cli.Scaleway (ScalewayCliOpts(..), scalewayCliOptsParser)
 import Options.Applicative
+  ( Alternative((<|>)), Parser, (<**>), command, fullDesc, header, info
+  , progDesc, execParser, helper, hsubparser, ParserInfo )
 
 data CliCmd
-  = Create CreateCliOpts
+  = Aws AwsCliOpts
   | List ListCliOpts
+  | Scaleway ScalewayCliOpts
   | Ssh SshCliOpts
   | Destroy DestroyCliOpts
-  deriving stock Show
-
-data CreateCliOpts
-  = CreateCliOptsScaleway ScalewayCliOpts
-  | CreateCliOptsAws AwsCliOpts
   deriving stock Show
 
 data ListCliOpts = ListCliOpts
@@ -49,14 +46,14 @@ cliCmdParserInfo = info (cliCmdParser <**> helper)
 cliCmdParser :: Parser CliCmd
 cliCmdParser = hsubparser subParsers <|> list
   where
-    subParsers = createCommand <> listCommand <> sshCommand <> destroyCommand
+    subParsers = awsCommand <> listCommand <> scalewayCommand <> sshCommand <> destroyCommand
 
-    createCommand =
+    awsCommand =
       command
-        "create"
+        "aws"
         ( info
-            (fmap Create createCliOptsParser)
-            (progDesc "Create a new compute instance")
+            (fmap Aws awsCliOptsParser)
+            (progDesc "Run AWS-specific commands")
         )
 
     listCommand =
@@ -65,6 +62,14 @@ cliCmdParser = hsubparser subParsers <|> list
         ( info
             list
             (progDesc "List currently running compute instances")
+        )
+
+    scalewayCommand =
+      command
+        "scaleway"
+        ( info
+            (fmap Scaleway scalewayCliOptsParser)
+            (progDesc "Run Scaleway-specific commands")
         )
 
     sshCommand =
@@ -84,28 +89,6 @@ cliCmdParser = hsubparser subParsers <|> list
         )
 
     list = fmap List listCliOptsParser
-
-createCliOptsParser :: Parser CreateCliOpts
-createCliOptsParser = hsubparser subParsers
-  where
-    subParsers = scalewayCommand <> awsCommand
-
-    scalewayCommand =
-      command
-        "scaleway"
-        ( info
-            (fmap CreateCliOptsScaleway scalewayCliOptsParser)
-            (progDesc "Create a new compute instance in Scaleway")
-        )
-
-    awsCommand =
-      command
-        "aws"
-        ( info
-            (fmap CreateCliOptsAws awsCliOptsParser)
-            (progDesc "Create a new compute instance in AWS")
-        )
-
 
 listCliOptsParser :: Parser ListCliOpts
 listCliOptsParser = pure ListCliOpts

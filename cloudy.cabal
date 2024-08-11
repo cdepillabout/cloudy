@@ -32,12 +32,13 @@ library
   hs-source-dirs:      src
   exposed-modules:     Cloudy
                        Cloudy.Cli
-                       Cloudy.Cli.CreateAws
-                       Cloudy.Cli.CreateScaleway
+                       Cloudy.Cli.Aws
+                       Cloudy.Cli.Scaleway
                        Cloudy.Cli.Utils
-                       Cloudy.Cmd.Create
-                       Cloudy.Cmd.Create.Scaleway
+                       Cloudy.Cmd
+                       Cloudy.Cmd.Aws
                        Cloudy.Cmd.List
+                       Cloudy.Cmd.Scaleway
                        Cloudy.Cmd.Ssh
                        Cloudy.Cmd.Destroy
                        Cloudy.LocalConfFile
