@@ -39,6 +39,9 @@ library
                        Cloudy.Cmd.Aws
                        Cloudy.Cmd.List
                        Cloudy.Cmd.Scaleway
+                       Cloudy.Cmd.Scaleway.Create
+                       Cloudy.Cmd.Scaleway.ListInstanceTypes
+                       Cloudy.Cmd.Scaleway.Utils
                        Cloudy.Cmd.Ssh
                        Cloudy.Cmd.Destroy
                        Cloudy.LocalConfFile
