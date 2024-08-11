@@ -41,6 +41,7 @@ library
                        Cloudy.Cmd.Ssh
                        Cloudy.Cmd.Destroy
                        Cloudy.LocalConfFile
+                       Cloudy.NameGen
                        Cloudy.Scaleway
   build-depends:       base
                      , aeson
