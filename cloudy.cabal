@@ -34,6 +34,7 @@ library
                        Cloudy.Cli
                        Cloudy.Cli.CreateAws
                        Cloudy.Cli.CreateScaleway
+                       Cloudy.Cli.Utils
                        Cloudy.Cmd.Create
                        Cloudy.Cmd.Create.Scaleway
                        Cloudy.Cmd.List

@@ -42,7 +42,7 @@ parseCliOpts = execParser cliCmdParserInfo
 cliCmdParserInfo :: ParserInfo CliCmd
 cliCmdParserInfo = info (cliCmdParser <**> helper)
   ( fullDesc <>
-    -- progDesc "Dcut" <>
+    -- progDesc "cloudy" <>
     header "cloudy - create, setup, and manage compute instances in various cloud environments"
   )
 

@@ -155,5 +155,5 @@ scalewayApi :: Proxy ScalewayApi
 scalewayApi = Proxy
 
 ipsPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> IpsReq -> ClientM IpsResp
-serverPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> ServersReq -> ClientM ServersResp
-ipsPostApi :<|> serverPostApi = client scalewayApi
+serversPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> ServersReq -> ClientM ServersResp
+ipsPostApi :<|> serversPostApi = client scalewayApi
