@@ -47,6 +47,7 @@ library
                        Cloudy.LocalConfFile
                        Cloudy.NameGen
                        Cloudy.Scaleway
+                       Cloudy.Table
   build-depends:       base
                      , aeson
                      , bytestring
@@ -63,7 +64,6 @@ library
                      , servant-client
                      , servant-client-core
                      , sqlite-simple
-                     , tabular
                      , text
                      , time
                      , uuid

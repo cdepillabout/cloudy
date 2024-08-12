@@ -6,20 +6,18 @@ import Cloudy.Cli.Scaleway (ScalewayListInstanceTypesCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Scaleway (Zone (..), productsServersPostApi, ProductServersResp (..), ProductServer (..))
+import Cloudy.Table (printTable, Table (..))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
+import Data.List (sortOn, foldl')
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text, unpack, pack)
 import Network.HTTP.Client.TLS (newTlsManager)
 import Servant.Client (mkClientEnv, runClientM, ClientM)
 import Text.Pretty.Simple (pPrint)
-import Data.List (sortOn, foldl')
-import Text.Tabular (Table (Table), SemiTable, row, (+.+), col, (^|^), (^..^), colH, Header (..), Properties (..))
-import Text.Tabular.AsciiArt (render)
 import Text.Printf (printf)
-import Data.List.NonEmpty (NonEmpty)
-import qualified Text.Tabular as Tabular
 
 data ScalewayListInstanceTypesSettings = ScalewayListInstanceTypesSettings
   { secretKey :: Text
@@ -61,51 +59,32 @@ displayInstanceTypes :: Map Text ProductServer -> IO ()
 displayInstanceTypes instanceTypes = do
   let instList = Map.toList instanceTypes
       sortByPriceInstList = sortOn (\(_, prod) -> prod.monthlyPrice) instList
-  -- pPrint sortByPriceInstList
-      instTable = mkTable sortByPriceInstList
-  putStrLn $ render unpack unpack unpack instTable
+  case sortByPriceInstList of
+    [] -> undefined
+    (hInst : tInsts) -> do
+      let instTable = mkTable (hInst :| tInsts)
+      printTable instTable
 
-mkTable :: [(Text, ProductServer)] -> Table Text Text Text
+mkTable :: NonEmpty (Text, ProductServer) -> Table
 mkTable instanceTypes =
   Table
-    (Group NoLine [])
-    (Group SingleLine [Header "instance type id", Header "monthly cost"])
-    (fmap mkRow instanceTypes)
+    { headers =
+        "instance type id" :|
+        [ "monthly cost"
+        , "architecture"
+        ]
+    , body = fmap mkRow instanceTypes
+    }
 
-mkRow :: (Text, ProductServer) -> [Text]
+mkRow :: (Text, ProductServer) -> NonEmpty Text
 mkRow (instType, prod) =
-  [ instType
-  , "€ " <> pack (printf "% 5.2f" prod.monthlyPrice)
+  instType :|
+  [ "€ " <> pack (printf "% 7.2f" prod.monthlyPrice)
+  , prod.arch
   ]
 
--- mkTable :: [(Text, ProductServer)] -> Table Text Text Text
--- mkTable instanceTypes =
---   let rows = fmap mkRow instanceTypes
---       tableHeader =
---         Tabular.empty ^..^ colH "instance type identifier" ^|^ colH "monthly cost"
---       table = foldl' (+.+) tableHeader rows
---   in
---   table
---
--- mkRow :: (Text, ProductServer) -> SemiTable Text Text
--- mkRow (instType, prod) = row instType prodInfos
---   where
---     prodInfos :: [Text]
---     prodInfos =
---       [ "€ " <> pack (printf "% 5.2f" prod.monthlyPrice)
---       ]
   -- { monthlyPrice :: Float
+  -- , arch :: Text
   -- , ncpus :: Int
   -- , ram :: Int
-  -- , arch :: Text
   -- , sumInternetBandwidth :: Int
-
--- example2 =
---   empty ^..^ colH "memtest 1" ^|^ colH "memtest 2"
---         ^||^ colH "time test" ^|^ colH "time test 2"
---   +.+ row "A 1" ["hog", "terrible", "slow", "slower"]
---   +.+ row "A 2" ["pig", "not bad", "fast", "slowest"]
---   +----+
---       row "B 1" ["good", "awful", "intolerable", "bearable"]
---   +.+ row "B 2" ["better", "no chance", "crawling", "amazing"]
---   +.+ row "B 3" ["meh",  "well...", "worst ever", "ok"]
