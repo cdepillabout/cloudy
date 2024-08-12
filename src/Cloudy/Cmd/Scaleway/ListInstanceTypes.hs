@@ -5,16 +5,17 @@ module Cloudy.Cmd.Scaleway.ListInstanceTypes where
 import Cloudy.Cli.Scaleway (ScalewayListInstanceTypesCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
-import Cloudy.NameGen (instanceNameGen)
-import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), ProjectId (..), serversPostApi, ServersReq (..))
+import Cloudy.Scaleway (Zone (..), productsServersPostApi, ProductServersResp (..))
 import Control.Monad.IO.Class (liftIO)
+import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import Network.HTTP.Client.TLS (newTlsManager)
 import Servant.Client (mkClientEnv, runClientM, ClientM)
+import Text.Pretty.Simple (pPrint)
+import Control.Monad (when)
 
 data ScalewayListInstanceTypesSettings = ScalewayListInstanceTypesSettings
   { secretKey :: Text
-  , projectId :: ProjectId
   , zone :: Zone
   }
 
@@ -22,11 +23,9 @@ mkSettings :: LocalConfFileOpts -> ScalewayListInstanceTypesCliOpts -> IO Scalew
 mkSettings localConfFileOpts cliOpts = do
   let maybeSecretKey = localConfFileOpts.scaleway >>= \scale -> scale.secretKey :: Maybe Text
   secretKey <- getVal maybeSecretKey "Could not find scaleway.secret_key in config file"
-  let maybeProjectId = localConfFileOpts.scaleway >>= \scale -> fmap ProjectId scale.defaultProjectId
-  projectId <- getVal maybeProjectId "Could not find scaleway.default_project_id in config file"
   let maybeZoneFromConfFile = localConfFileOpts.scaleway >>= \scale -> scale.defaultZone
   zone <- getZone maybeZoneFromConfFile cliOpts.zone
-  pure ScalewayListInstanceTypesSettings { secretKey, projectId, zone }
+  pure ScalewayListInstanceTypesSettings { secretKey, zone }
   where
     getVal :: Maybe a -> String -> IO a
     getVal mayVal errMsg = maybe (error errMsg) pure mayVal
@@ -37,24 +36,15 @@ runListInstanceTypes localConfFileOpts scalewayOpts = do
   manager <- newTlsManager
   let clientEnv = mkClientEnv manager scalewayBaseUrl
   res <- runClientM (go settings) clientEnv
-  print res
+  pPrint res
   where
     go :: ScalewayListInstanceTypesSettings -> ClientM ()
     go settings = do
       let authReq = createAuthReq settings.secretKey
-      ipsRes <- ipsPostApi authReq settings.zone (IpsReq "routed_ipv4" settings.projectId)
-      liftIO $ putStrLn $ "ips resp: " <> show ipsRes
-      serverName <- liftIO instanceNameGen
-      let serversReq =
-            ServersReq
-              { bootType {- :: Text -} = "local"
-              , commercialType {- :: Text -} = undefined
-              , image {- :: ImageId -} = undefined
-              , name {- :: Text -} = serverName
-              , publicIps {- :: [IpId] -} = undefined
-              , tags {- :: [Text] -} = undefined
-              , volumes {- :: Map Text Volume -} = undefined
-              , project {- :: ProjectId -} = settings.projectId
-              }
-      serversResp <- serversPostApi authReq settings.zone serversReq
-      liftIO $ putStrLn $ "servers resp: " <> show serversResp
+          numPerPage = 100
+      ProductServersResp productServers <- productsServersPostApi authReq settings.zone (Just numPerPage)
+      let numProductServers = length $ Map.elems productServers
+      when (numProductServers == numPerPage) $
+        liftIO $ putStrLn "WARNING: The number of instance types returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
+      -- liftIO $ putStrLn "products servers resp: "
+      -- pPrint vals

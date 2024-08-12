@@ -57,6 +57,7 @@ library
                      , http-client-tls
                      , network-bsd
                      , optparse-applicative
+                     , pretty-simple
                      , random
                      , servant
                      , servant-client

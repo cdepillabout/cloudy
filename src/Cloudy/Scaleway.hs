@@ -6,7 +6,7 @@ import Data.Aeson (ToJSON(..), object, (.=), FromJSON (..), withObject, Value, (
 import Data.Map.Strict (Map)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Servant.API ((:>), Capture, ReqBody, JSON, Post, AuthProtect, (:<|>) ((:<|>)), PostCreated)
+import Servant.API ((:>), Capture, ReqBody, JSON, Post, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam)
 import Servant.Client (client, ClientM)
 import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
@@ -143,17 +143,50 @@ instance FromJSON ServersResp where
     name <- innerObj .: "name"
     pure ServersResp { id = id_, name }
 
+newtype ProductServersResp = ProductServersResp { unProductServersResp :: Map Text ProductServer }
+  deriving stock Show
+
+instance FromJSON ProductServersResp where
+  parseJSON :: Value -> Parser ProductServersResp
+  parseJSON = withObject "ProductServersResp outer wrapper" $ \o -> do
+    productServers <- o .: "servers"
+    pure $ ProductServersResp productServers
+
+data ProductServer = ProductServer
+  { monthlyPrice :: Float
+  , ncpus :: Int
+  , ram :: Int
+  , arch :: Text
+  , sumInternetBandwidth :: Int
+  }
+  deriving stock Show
+
+instance FromJSON ProductServer where
+  parseJSON :: Value -> Parser ProductServer
+  parseJSON = withObject "ProductServer" $ \o -> do
+    monthlyPrice <- o .: "monthly_price"
+    ncpus <- o .: "ncpus"
+    ram <- o .: "ram"
+    arch <- o .: "arch"
+    networkObj <- o .: "network"
+    sumInternetBandwidth <- networkObj .: "sum_internal_bandwidth"
+    pure ProductServer { monthlyPrice, ncpus, ram, sumInternetBandwidth, arch }
+
 type InstanceIpsPostApi =
   AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "ips" :> ReqBody '[JSON] IpsReq :> PostCreated '[JSON] IpsResp
 
 type InstanceServersPostApi =
   AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "servers" :> ReqBody '[JSON] ServersReq :> Post '[JSON] ServersResp
 
-type ScalewayApi = InstanceIpsPostApi :<|> InstanceServersPostApi
+type InstanceProductsServersGetApi =
+  AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "products" :> "servers" :> QueryParam "per_page" Int :> Get '[JSON] ProductServersResp
+
+type ScalewayApi = InstanceIpsPostApi :<|> InstanceServersPostApi :<|> InstanceProductsServersGetApi
 
 scalewayApi :: Proxy ScalewayApi
 scalewayApi = Proxy
 
 ipsPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> IpsReq -> ClientM IpsResp
 serversPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> ServersReq -> ClientM ServersResp
-ipsPostApi :<|> serversPostApi = client scalewayApi
+productsServersPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> Maybe Int -> ClientM ProductServersResp
+ipsPostApi :<|> serversPostApi :<|> productsServersPostApi = client scalewayApi
