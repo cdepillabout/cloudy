@@ -85,9 +85,12 @@ mkRow (instType, prod) =
   [ "€ " <> pack (printf "% 8.2f" prod.monthlyPrice)
   , prod.arch
   , pack $ show prod.ncpus
-  , pack $ printf "% 8.01f gb" (fromIntegral prod.ram / oneGib :: Double)
-  , pack $ show prod.sumInternetBandwidth
+  , pack $ printf "% 8.01f gib" (fromIntegral prod.ram / oneGib :: Double)
+  , pack $ printf "% 8.03f gbps" (fromIntegral prod.sumInternetBandwidth / oneGb :: Double)
   ]
 
 oneGib :: Num a => a
 oneGib = 1024 * 1024 * 1024
+
+oneGb :: Num a => a
+oneGb = 1000 * 1000 * 1000
