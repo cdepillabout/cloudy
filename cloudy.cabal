@@ -63,6 +63,7 @@ library
                      , servant-client
                      , servant-client-core
                      , sqlite-simple
+                     , tabular
                      , text
                      , time
                      , uuid
