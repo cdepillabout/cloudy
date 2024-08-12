@@ -6,7 +6,7 @@ import Cloudy.Cli.Scaleway (ScalewayListInstanceTypesCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Scaleway (Zone (..), productsServersPostApi, ProductServersResp (..), ProductServer (..))
-import Cloudy.Table (printTable, Table (..))
+import Cloudy.Table (printTable, Table (..), Align (..))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Data.List (sortOn, foldl')
@@ -68,12 +68,12 @@ displayInstanceTypes instanceTypes = do
 mkTable :: NonEmpty (Text, ProductServer) -> Table
 mkTable instanceTypes =
   Table
-    { headers =
-        "instance type id" :|
-        [ "monthly cost"
-        , "architecture"
+    { tableHeaders =
+        (LeftJustified, "instance type id") :|
+        [ (RightJustified, "monthly cost")
+        , (LeftJustified, "architecture")
         ]
-    , body = fmap mkRow instanceTypes
+    , tableBodyRows = fmap mkRow instanceTypes
     }
 
 mkRow :: (Text, ProductServer) -> NonEmpty Text
