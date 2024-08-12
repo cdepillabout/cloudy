@@ -72,6 +72,9 @@ mkTable instanceTypes =
         (LeftJustified, "instance type id") :|
         [ (RightJustified, "monthly cost")
         , (LeftJustified, "architecture")
+        , (RightJustified, "cpus")
+        , (RightJustified, "memory")
+        , (RightJustified, "bandwidth")
         ]
     , tableBodyRows = fmap mkRow instanceTypes
     }
@@ -79,12 +82,12 @@ mkTable instanceTypes =
 mkRow :: (Text, ProductServer) -> NonEmpty Text
 mkRow (instType, prod) =
   instType :|
-  [ "€ " <> pack (printf "% 7.2f" prod.monthlyPrice)
+  [ "€ " <> pack (printf "% 8.2f" prod.monthlyPrice)
   , prod.arch
+  , pack $ show prod.ncpus
+  , pack $ printf "% 8.01f gb" (fromIntegral prod.ram / oneGib :: Double)
+  , pack $ show prod.sumInternetBandwidth
   ]
 
-  -- { monthlyPrice :: Float
-  -- , arch :: Text
-  -- , ncpus :: Int
-  -- , ram :: Int
-  -- , sumInternetBandwidth :: Int
+oneGib :: Num a => a
+oneGib = 1024 * 1024 * 1024

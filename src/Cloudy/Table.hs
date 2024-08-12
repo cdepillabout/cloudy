@@ -34,7 +34,23 @@ renderTable headers body =
       maxAlignWidths = NonEmpty.zip (fmap fst headers) maxWidths
       rawHeaders = renderHeaders maxAlignWidths headerTexts
       rawBody = renderBody maxAlignWidths body
-  in rawHeaders <> "\n" <> rawBody
+      fatDiv = renderDiv True maxWidths "="
+      skinnyDiv = renderDiv False maxWidths "-"
+  in
+  Text.intercalate
+    "\n"
+    [ skinnyDiv
+    , rawHeaders
+    , fatDiv
+    , rawBody
+    , skinnyDiv
+    ]
+
+renderDiv :: Bool -> NonEmpty Int -> Text -> Text
+renderDiv shouldUseHorizontalDivs maxWidths c =
+  let divider = if shouldUseHorizontalDivs then c <> "|" <> c else c <> c <> c
+      rowMiddle = Text.intercalate divider . NonEmpty.toList $ fmap (\width -> Text.replicate width c) maxWidths
+  in "|" <> c <> rowMiddle <> c <> "|"
 
 renderHeaders :: NonEmpty (Align, Int) -> NonEmpty Text -> Text
 renderHeaders maxAlignWidths headers =
