@@ -6,11 +6,12 @@ import Data.Aeson (ToJSON(..), object, (.=), FromJSON (..), withObject, Value, (
 import Data.Map.Strict (Map)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Servant.API ((:>), Capture, ReqBody, JSON, Post, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam)
+import Servant.API ((:>), Capture, ReqBody, JSON, Post, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header)
 import Servant.Client (client, ClientM)
 import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
 import Data.Aeson.Types (Parser)
+import Data.Kind (Type)
 
 data Zone = NL1 | NL2 | NL3
   deriving (Eq, Show)
@@ -187,29 +188,131 @@ instance FromJSON ProductServersAvailabilityResp where
       parseAvail :: Value -> Parser Text
       parseAvail = withObject "ProductServersAvailability availability obj" $ \a -> a .: "availability"
 
+newtype ImagesResp = ImagesResp { unImagesResp :: [Image] }
+  deriving stock Show
+
+instance FromJSON ImagesResp where
+  parseJSON :: Value -> Parser ImagesResp
+  parseJSON = withObject "ImagesResp outer wrapper" $ \o -> do
+    images <- o .: "images"
+    pure $ ImagesResp images
+
+data Image = Image
+  { id :: Text
+  , name :: Text
+  }
+  deriving stock Show
+
+instance FromJSON Image where
+  parseJSON :: Value -> Parser Image
+  parseJSON = withObject "Image" $ \o -> do
+    id' <- o .: "id"
+    name <- o .: "name"
+    pure Image { id = id', name }
+
+type family Paged (verb :: [Type] -> Type -> Type) ct resp where
+  Paged verb ct resp =
+    QueryParam "per_page" Int :>
+    QueryParam "page" Int :>
+    verb ct (Headers '[Header "x-total-count" Int] resp)
+
 type InstanceIpsPostApi =
-  AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "ips" :> ReqBody '[JSON] IpsReq :> PostCreated '[JSON] IpsResp
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "ips" :>
+  ReqBody '[JSON] IpsReq :>
+  PostCreated '[JSON] IpsResp
 
 type InstanceServersPostApi =
-  AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "servers" :> ReqBody '[JSON] ServersReq :> Post '[JSON] ServersResp
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "servers" :>
+  ReqBody '[JSON] ServersReq :>
+  Post '[JSON] ServersResp
 
 type InstanceProductsServersGetApi =
-  AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "products" :> "servers" :> QueryParam "per_page" Int :> Get '[JSON] ProductServersResp
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "products" :>
+  "servers" :>
+  QueryParam "per_page" Int :>
+  Get '[JSON] ProductServersResp
 
 type InstanceProductsServersAvailabilityGetApi =
-  AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "products" :> "servers" :> "availability" :> QueryParam "per_page" Int :> Get '[JSON] ProductServersAvailabilityResp
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "products" :>
+  "servers" :>
+  "availability" :>
+  QueryParam "per_page" Int :>
+  Get '[JSON] ProductServersAvailabilityResp
+
+type InstanceImagesGetApi =
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "images" :>
+  QueryParam "arch" Text :>
+  Paged Get '[JSON] ImagesResp
 
 type ScalewayApi =
   InstanceIpsPostApi :<|>
   InstanceServersPostApi :<|>
   InstanceProductsServersGetApi :<|>
-  InstanceProductsServersAvailabilityGetApi
+  InstanceProductsServersAvailabilityGetApi :<|>
+  InstanceImagesGetApi
 
 scalewayApi :: Proxy ScalewayApi
 scalewayApi = Proxy
 
-ipsPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> IpsReq -> ClientM IpsResp
-serversPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> ServersReq -> ClientM ServersResp
-productsServersGetApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> Maybe Int -> ClientM ProductServersResp
-productsServersAvailabilityGetApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> Maybe Int -> ClientM ProductServersAvailabilityResp
-ipsPostApi :<|> serversPostApi :<|> productsServersGetApi :<|> productsServersAvailabilityGetApi = client scalewayApi
+ipsPostApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  IpsReq ->
+  ClientM IpsResp
+
+serversPostApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  ServersReq ->
+  ClientM ServersResp
+
+productsServersGetApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  Maybe Int ->
+  ClientM ProductServersResp
+
+productsServersAvailabilityGetApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  Maybe Int ->
+  ClientM ProductServersAvailabilityResp
+
+imagesGetApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  Maybe Text ->
+  Maybe Int ->
+  Maybe Int ->
+  ClientM (Headers '[Header "x-total-count" Int] ImagesResp)
+
+ipsPostApi
+  :<|> serversPostApi
+  :<|> productsServersGetApi
+  :<|> productsServersAvailabilityGetApi
+  :<|> imagesGetApi = client scalewayApi
