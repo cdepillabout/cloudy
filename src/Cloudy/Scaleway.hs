@@ -158,19 +158,21 @@ data ProductServer = ProductServer
   , ram :: Int
   , arch :: Text
   , sumInternetBandwidth :: Int
+  , altNames :: [Text]
   }
   deriving stock Show
 
 instance FromJSON ProductServer where
   parseJSON :: Value -> Parser ProductServer
   parseJSON = withObject "ProductServer" $ \o -> do
+    altNames <- o .: "alt_names"
     monthlyPrice <- o .: "monthly_price"
     ncpus <- o .: "ncpus"
     ram <- o .: "ram"
     arch <- o .: "arch"
     networkObj <- o .: "network"
     sumInternetBandwidth <- networkObj .: "sum_internal_bandwidth"
-    pure ProductServer { monthlyPrice, ncpus, ram, sumInternetBandwidth, arch }
+    pure ProductServer { monthlyPrice, ncpus, ram, sumInternetBandwidth, arch, altNames }
 
 newtype ProductServersAvailabilityResp = ProductServersAvailabilityResp { unProductServersAvailabilityResp :: Map Text Text }
   deriving stock Show

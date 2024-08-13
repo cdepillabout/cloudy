@@ -18,6 +18,7 @@ import Data.Text (Text, pack)
 import Network.HTTP.Client.TLS (newTlsManager)
 import Servant.Client (mkClientEnv, runClientM, ClientM)
 import Text.Printf (printf)
+import qualified Data.Text as Text
 
 data ScalewayListInstanceTypesSettings = ScalewayListInstanceTypesSettings
   { secretKey :: Text
@@ -86,6 +87,7 @@ mkTable instanceTypes =
         , (RightJustified, "memory")
         , (RightJustified, "bandwidth")
         , (LeftJustified, "availability")
+        , (LeftJustified, "alt names")
         ]
     , tableBodyRows = fmap mkRow instanceTypes
     }
@@ -99,6 +101,9 @@ mkRow (instType, (prod, availability)) =
   , pack $ printf "% 8.01f gib" (fromIntegral prod.ram / oneGib :: Double)
   , pack $ printf "% 8.03f gbps" (fromIntegral prod.sumInternetBandwidth / oneGb :: Double)
   , availability
+  , case prod.altNames of
+      [] -> "(none)"
+      names -> Text.intercalate ", " names
   ]
 
 oneGib :: Num a => a
