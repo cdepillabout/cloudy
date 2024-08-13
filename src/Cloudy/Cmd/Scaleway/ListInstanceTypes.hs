@@ -3,7 +3,7 @@
 module Cloudy.Cmd.Scaleway.ListInstanceTypes where
 
 import Cloudy.Cli.Scaleway (ScalewayListInstanceTypesCliOpts (..))
-import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone)
+import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi)
 import Cloudy.Table (printTable, Table (..), Align (..))
@@ -15,8 +15,7 @@ import Data.Map.Merge.Strict (merge, mapMissing, dropMissing, zipWithMatched)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text, pack)
-import Network.HTTP.Client.TLS (newTlsManager)
-import Servant.Client (mkClientEnv, runClientM, ClientM)
+import Servant.Client (ClientM)
 import Text.Printf (printf)
 import qualified Data.Text as Text
 
@@ -39,12 +38,11 @@ mkSettings localConfFileOpts cliOpts = do
 runListInstanceTypes :: LocalConfFileOpts -> ScalewayListInstanceTypesCliOpts -> IO ()
 runListInstanceTypes localConfFileOpts scalewayOpts = do
   settings <- mkSettings localConfFileOpts scalewayOpts
-  manager <- newTlsManager
-  let clientEnv = mkClientEnv manager scalewayBaseUrl
-  res <- runClientM (fetchInstanceTypes settings) clientEnv
-  case res of
-    Left err -> putStrLn $ "ERROR! Problem fetching instance types: " <> show err
-    Right instanceTypes -> displayInstanceTypes instanceTypes
+  instanceTypes <-
+    runScalewayClientM
+      (\err -> error $ "ERROR! Problem fetching instance types: " <> show err)
+      (fetchInstanceTypes settings)
+  displayInstanceTypes instanceTypes
 
 fetchInstanceTypes :: ScalewayListInstanceTypesSettings -> ClientM (Map Text (ProductServer, Text))
 fetchInstanceTypes settings = do

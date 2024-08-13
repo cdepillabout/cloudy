@@ -3,14 +3,13 @@
 module Cloudy.Cmd.Scaleway.Create where
 
 import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
-import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone)
+import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.NameGen (instanceNameGen)
 import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..))
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text)
-import Network.HTTP.Client.TLS (newTlsManager)
-import Servant.Client (mkClientEnv, runClientM, ClientM)
+import Servant.Client (ClientM)
 
 data ScalewayCreateSettings = ScalewayCreateSettings
   { secretKey :: Text
@@ -37,10 +36,9 @@ mkSettings localConfFileOpts cliOpts = do
 runCreate :: LocalConfFileOpts -> ScalewayCreateCliOpts -> IO ()
 runCreate localConfFileOpts scalewayOpts = do
   settings <- mkSettings localConfFileOpts scalewayOpts
-  manager <- newTlsManager
-  let clientEnv = mkClientEnv manager scalewayBaseUrl
-  res <- runClientM (go settings) clientEnv
-  print res
+  runScalewayClientM
+    (\err -> error $ "ERROR! Problem creating image: " <> show err)
+    (go settings)
   where
     go :: ScalewayCreateSettings -> ClientM ()
     go settings = do

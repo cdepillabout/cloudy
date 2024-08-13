@@ -41,13 +41,10 @@ mkSettings localConfFileOpts cliOpts = do
 runListImages :: LocalConfFileOpts -> ScalewayListImagesCliOpts -> IO ()
 runListImages localConfFileOpts scalewayOpts = do
   settings <- mkSettings localConfFileOpts scalewayOpts
-  instanceTypes <-
+  images <-
     runScalewayClientM
       (\err -> error $ "Problem fetching instance types: " <> show err)
       (fetchImages settings)
-  manager <- newTlsManager
-  let clientEnv = mkClientEnv manager scalewayBaseUrl
-  images <- runClientM (fetchImages settings) clientEnv
   displayImages images
 
 fetchImages :: ScalewayListImagesSettings -> ClientM (Map Text (ProductServer, Text))
