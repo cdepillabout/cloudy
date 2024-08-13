@@ -17,6 +17,7 @@ data LocalConfFileScalewayOpts = LocalConfFileScalewayOpts
   , defaultOrganizationId :: Maybe Text
   , defaultProjectId :: Maybe Text
   , defaultZone :: Maybe Text
+  , defaultInstanceType :: Maybe Text
   } deriving Show
 
 instance FromJSON LocalConfFileScalewayOpts where
@@ -27,7 +28,8 @@ instance FromJSON LocalConfFileScalewayOpts where
     defaultOrganizationId <- o .:? "default_organization_id"
     defaultProjectId <- o .:? "default_project_id"
     defaultZone <- o .:? "default_zone"
-    pure LocalConfFileScalewayOpts { accessKey, secretKey, defaultOrganizationId, defaultProjectId, defaultZone }
+    defaultInstanceType <- o .:? "default_instance_type"
+    pure LocalConfFileScalewayOpts { accessKey, secretKey, defaultOrganizationId, defaultProjectId, defaultZone, defaultInstanceType }
 
 data LocalConfFileOpts = LocalConfFileOpts
   { scaleway :: Maybe LocalConfFileScalewayOpts

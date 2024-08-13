@@ -29,4 +29,4 @@ instanceNameGen :: IO Text
 instanceNameGen = do
   name1 <- randomName
   name2 <- randomName
-  pure $ name1 <> "-" <> name2
+  pure $ "cloudy-" <> name1 <> "-" <> name2

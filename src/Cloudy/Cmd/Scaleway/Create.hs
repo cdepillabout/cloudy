@@ -6,7 +6,7 @@ import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.NameGen (instanceNameGen)
-import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), ProjectId (..), serversPostApi, ServersReq (..))
+import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..))
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text)
 import Network.HTTP.Client.TLS (newTlsManager)
@@ -16,6 +16,7 @@ data ScalewayCreateSettings = ScalewayCreateSettings
   { secretKey :: Text
   , projectId :: ProjectId
   , zone :: Zone
+  , instanceType :: Text
   }
 
 mkSettings :: LocalConfFileOpts -> ScalewayCreateCliOpts -> IO ScalewayCreateSettings
@@ -26,7 +27,9 @@ mkSettings localConfFileOpts cliOpts = do
   projectId <- getVal maybeProjectId "Could not find scaleway.default_project_id in config file"
   let maybeZoneFromConfFile = localConfFileOpts.scaleway >>= \scale -> scale.defaultZone
   zone <- getZone maybeZoneFromConfFile cliOpts.zone
-  pure ScalewayCreateSettings { secretKey, projectId, zone }
+  let maybeInstanceType = localConfFileOpts.scaleway >>= \scale -> scale.defaultInstanceType
+  instanceType <- getVal maybeInstanceType "Could not find scaleway.default_instance_type in config file"
+  pure ScalewayCreateSettings { secretKey, projectId, zone, instanceType }
   where
     getVal :: Maybe a -> String -> IO a
     getVal mayVal errMsg = maybe (error errMsg) pure mayVal
@@ -48,11 +51,11 @@ runCreate localConfFileOpts scalewayOpts = do
       let serversReq =
             ServersReq
               { bootType {- :: Text -} = "local"
-              , commercialType {- :: Text -} = undefined
+              , commercialType {- :: Text -} = settings.instanceType
               , image {- :: ImageId -} = undefined
               , name {- :: Text -} = serverName
-              , publicIps {- :: [IpId] -} = undefined
-              , tags {- :: [Text] -} = undefined
+              , publicIps {- :: [IpId] -} = [ipsRes.id]
+              , tags {- :: [Text] -} = ["cloudy"]
               , volumes {- :: Map Text Volume -} = undefined
               , project {- :: ProjectId -} = settings.projectId
               }
