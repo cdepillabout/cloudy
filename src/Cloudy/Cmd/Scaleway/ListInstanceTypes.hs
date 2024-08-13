@@ -18,7 +18,6 @@ import Data.Text (Text, pack)
 import Network.HTTP.Client.TLS (newTlsManager)
 import Servant.Client (mkClientEnv, runClientM, ClientM)
 import Text.Printf (printf)
-import Text.Pretty.Simple (pPrint)
 
 data ScalewayListInstanceTypesSettings = ScalewayListInstanceTypesSettings
   { secretKey :: Text
@@ -55,7 +54,6 @@ fetchInstanceTypes settings = do
   when (numProductServers == numPerPage) $
     liftIO $ putStrLn "WARNING: The number of instance types returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
   ProductServersAvailabilityResp avail <- productsServersAvailabilityGetApi authReq settings.zone (Just numPerPage)
-  pPrint avail
   let numAvail = length $ Map.elems avail
   when (numAvail == numPerPage) $
     liftIO $ putStrLn "WARNING: The number of availabilities returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
