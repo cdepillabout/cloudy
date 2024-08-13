@@ -5,19 +5,20 @@ module Cloudy.Cmd.Scaleway.ListInstanceTypes where
 import Cloudy.Cli.Scaleway (ScalewayListInstanceTypesCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
-import Cloudy.Scaleway (Zone (..), productsServersPostApi, ProductServersResp (..), ProductServer (..))
+import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi)
 import Cloudy.Table (printTable, Table (..), Align (..))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
-import Data.List (sortOn, foldl')
+import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Map.Merge.Strict (merge, mapMissing, dropMissing, zipWithMatched)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Text (Text, unpack, pack)
+import Data.Text (Text, pack)
 import Network.HTTP.Client.TLS (newTlsManager)
 import Servant.Client (mkClientEnv, runClientM, ClientM)
-import Text.Pretty.Simple (pPrint)
 import Text.Printf (printf)
+import Text.Pretty.Simple (pPrint)
 
 data ScalewayListInstanceTypesSettings = ScalewayListInstanceTypesSettings
   { secretKey :: Text
@@ -45,27 +46,38 @@ runListInstanceTypes localConfFileOpts scalewayOpts = do
     Left err -> putStrLn $ "ERROR! Problem fetching instance types: " <> show err
     Right instanceTypes -> displayInstanceTypes instanceTypes
 
-fetchInstanceTypes :: ScalewayListInstanceTypesSettings -> ClientM (Map Text ProductServer)
+fetchInstanceTypes :: ScalewayListInstanceTypesSettings -> ClientM (Map Text (ProductServer, Text))
 fetchInstanceTypes settings = do
   let authReq = createAuthReq settings.secretKey
       numPerPage = 100
-  ProductServersResp productServers <- productsServersPostApi authReq settings.zone (Just numPerPage)
+  ProductServersResp productServers <- productsServersGetApi authReq settings.zone (Just numPerPage)
   let numProductServers = length $ Map.elems productServers
   when (numProductServers == numPerPage) $
     liftIO $ putStrLn "WARNING: The number of instance types returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
-  pure productServers
+  ProductServersAvailabilityResp avail <- productsServersAvailabilityGetApi authReq settings.zone (Just numPerPage)
+  pPrint avail
+  let numAvail = length $ Map.elems avail
+  when (numAvail == numPerPage) $
+    liftIO $ putStrLn "WARNING: The number of availabilities returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
+  pure $
+    merge
+      (mapMissing (\_ prod -> (prod, "UNKNOWN")))
+      dropMissing
+      (zipWithMatched (\_ -> (,)))
+      productServers
+      avail
 
-displayInstanceTypes :: Map Text ProductServer -> IO ()
+displayInstanceTypes :: Map Text (ProductServer, Text) -> IO ()
 displayInstanceTypes instanceTypes = do
   let instList = Map.toList instanceTypes
-      sortByPriceInstList = sortOn (\(_, prod) -> prod.monthlyPrice) instList
+      sortByPriceInstList = sortOn (\(_, (prod, _)) -> prod.monthlyPrice) instList
   case sortByPriceInstList of
     [] -> undefined
     (hInst : tInsts) -> do
       let instTable = mkTable (hInst :| tInsts)
       printTable instTable
 
-mkTable :: NonEmpty (Text, ProductServer) -> Table
+mkTable :: NonEmpty (Text, (ProductServer, Text)) -> Table
 mkTable instanceTypes =
   Table
     { tableHeaders =
@@ -75,18 +87,20 @@ mkTable instanceTypes =
         , (RightJustified, "cpus")
         , (RightJustified, "memory")
         , (RightJustified, "bandwidth")
+        , (LeftJustified, "availability")
         ]
     , tableBodyRows = fmap mkRow instanceTypes
     }
 
-mkRow :: (Text, ProductServer) -> NonEmpty Text
-mkRow (instType, prod) =
+mkRow :: (Text, (ProductServer, Text)) -> NonEmpty Text
+mkRow (instType, (prod, availability)) =
   instType :|
-  [ "€ " <> pack (printf "% 8.2f" prod.monthlyPrice)
+  [ "€" <> pack (printf "% 8.2f" prod.monthlyPrice)
   , prod.arch
   , pack $ show prod.ncpus
   , pack $ printf "% 8.01f gib" (fromIntegral prod.ram / oneGib :: Double)
   , pack $ printf "% 8.03f gbps" (fromIntegral prod.sumInternetBandwidth / oneGb :: Double)
+  , availability
   ]
 
 oneGib :: Num a => a

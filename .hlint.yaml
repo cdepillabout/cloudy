@@ -68,6 +68,7 @@
 - ignore: {name: "Use uncurry"}
 - ignore: {name: "Use newtype instead of data"}
 - ignore: {name: "Avoid lambda using `infix`"}
+- ignore: {name: "Use const"}
 
 
 

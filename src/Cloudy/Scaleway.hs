@@ -172,6 +172,19 @@ instance FromJSON ProductServer where
     sumInternetBandwidth <- networkObj .: "sum_internal_bandwidth"
     pure ProductServer { monthlyPrice, ncpus, ram, sumInternetBandwidth, arch }
 
+newtype ProductServersAvailabilityResp = ProductServersAvailabilityResp { unProductServersAvailabilityResp :: Map Text Text }
+  deriving stock Show
+
+instance FromJSON ProductServersAvailabilityResp where
+  parseJSON :: Value -> Parser ProductServersAvailabilityResp
+  parseJSON = withObject "ProductServersAvailabilityResp outer wrapper" $ \o -> do
+    serversObj :: Map Text Value <- o .: "servers"
+    availabilityMap <- traverse parseAvail serversObj
+    pure $ ProductServersAvailabilityResp availabilityMap
+    where
+      parseAvail :: Value -> Parser Text
+      parseAvail = withObject "ProductServersAvailability availability obj" $ \a -> a .: "availability"
+
 type InstanceIpsPostApi =
   AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "ips" :> ReqBody '[JSON] IpsReq :> PostCreated '[JSON] IpsResp
 
@@ -181,12 +194,20 @@ type InstanceServersPostApi =
 type InstanceProductsServersGetApi =
   AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "products" :> "servers" :> QueryParam "per_page" Int :> Get '[JSON] ProductServersResp
 
-type ScalewayApi = InstanceIpsPostApi :<|> InstanceServersPostApi :<|> InstanceProductsServersGetApi
+type InstanceProductsServersAvailabilityGetApi =
+  AuthProtect "auth-token" :> "instance" :> "v1" :> "zones" :> Capture "zone" Zone :> "products" :> "servers" :> "availability" :> QueryParam "per_page" Int :> Get '[JSON] ProductServersAvailabilityResp
+
+type ScalewayApi =
+  InstanceIpsPostApi :<|>
+  InstanceServersPostApi :<|>
+  InstanceProductsServersGetApi :<|>
+  InstanceProductsServersAvailabilityGetApi
 
 scalewayApi :: Proxy ScalewayApi
 scalewayApi = Proxy
 
 ipsPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> IpsReq -> ClientM IpsResp
 serversPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> ServersReq -> ClientM ServersResp
-productsServersPostApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> Maybe Int -> ClientM ProductServersResp
-ipsPostApi :<|> serversPostApi :<|> productsServersPostApi = client scalewayApi
+productsServersGetApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> Maybe Int -> ClientM ProductServersResp
+productsServersAvailabilityGetApi :: AuthenticatedRequest (AuthProtect "auth-token") -> Zone -> Maybe Int -> ClientM ProductServersAvailabilityResp
+ipsPostApi :<|> serversPostApi :<|> productsServersGetApi :<|> productsServersAvailabilityGetApi = client scalewayApi
