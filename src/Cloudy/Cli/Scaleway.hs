@@ -2,7 +2,7 @@
 module Cloudy.Cli.Scaleway where
 
 import Data.Text (Text)
-import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, Alternative ((<|>)), switch)
+import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, Alternative ((<|>)), switch, auto)
 import Cloudy.Cli.Utils (maybeOpt)
 
 data ScalewayCliOpts
@@ -14,6 +14,7 @@ data ScalewayCliOpts
 data ScalewayCreateCliOpts = ScalewayCreateCliOpts
   { zone :: Maybe Text
   , instanceType :: Maybe Text
+  , volumeSizeGb :: Int
   }
   deriving stock Show
 
@@ -60,7 +61,8 @@ scalewayCliOptsParser = hsubparser subParsers
         )
 
 scalewayCreateCliOptsParser :: Parser ScalewayCreateCliOpts
-scalewayCreateCliOptsParser = ScalewayCreateCliOpts <$> zoneParser <*> instanceTypeParser
+scalewayCreateCliOptsParser =
+  ScalewayCreateCliOpts <$> zoneParser <*> instanceTypeParser <*> volumeSizeGbParser
 
 scalewayListInstanceTypesCliOptsParser :: Parser ScalewayListInstanceTypesCliOpts
 scalewayListInstanceTypesCliOptsParser = ScalewayListInstanceTypesCliOpts <$> zoneParser
@@ -85,7 +87,7 @@ instanceTypeParser :: Parser (Maybe Text)
 instanceTypeParser =
   maybeOpt
     "Scaleway instance type (use `cloudy scaleway list-instance-types` command to get list of all instance types)"
-    "PLAY2-PICO"
+    "VC1M"
     strOption
     ( long "instance-type" <>
       short 'c' <>
@@ -128,4 +130,16 @@ allVersionsParser =
     ( long "all-versions" <>
       short 'a' <>
       help "List all versions of each image.  By default, only show the latest version for each image name."
+    )
+
+volumeSizeGbParser :: Parser Int
+volumeSizeGbParser =
+  option
+    auto
+    ( long "volume-size" <>
+      short 's' <>
+      metavar "VOLUME_SIZE" <>
+      help "Size of the root volume in GBs" <>
+      value 50 <>
+      showDefault
     )

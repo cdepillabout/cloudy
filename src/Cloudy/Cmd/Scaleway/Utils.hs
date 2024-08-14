@@ -29,6 +29,9 @@ runScalewayClientM errHandler action = do
     Left err -> errHandler err
     Right a -> pure a
 
+defaultZone :: Zone
+defaultZone = NL1
+
 getZone :: Maybe Text -> Maybe Text -> IO Zone
 getZone maybeZoneFromConfFile maybeZoneFromCliOpts =
   case (maybeZoneFromConfFile, maybeZoneFromCliOpts) of
@@ -44,7 +47,17 @@ getZone maybeZoneFromConfFile maybeZoneFromCliOpts =
           error . unpack $
             "Could not parse zone specified in scaleway.defaultZone in config file: " <> zoneFromConfFile
         Just zone -> pure zone
-    (Nothing, Nothing) -> pure NL1
+    (Nothing, Nothing) -> pure defaultZone
+
+defaultInstanceType :: Text
+defaultInstanceType = "VC1M"
+
+getInstanceType :: Maybe Text -> Maybe Text -> Text
+getInstanceType maybeInstanceTypeFromConfFile maybeInstanceTypeFromCliOpts =
+  case (maybeInstanceTypeFromConfFile, maybeInstanceTypeFromCliOpts) of
+    (_, Just instanceTypeFromCliOpts) -> instanceTypeFromCliOpts
+    (Just instanceTypeFromConfFile, _) -> instanceTypeFromConfFile
+    (Nothing, Nothing) -> defaultInstanceType
 
 fetchPagedApi ::
   Monad m =>

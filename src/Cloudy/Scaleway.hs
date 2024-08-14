@@ -75,7 +75,8 @@ newtype ServerId = ServerId { unServerId :: Text }
   deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
 
 data Volume = Volume
-  { size :: Int
+  { name :: Text
+  , size :: Int
   , volumeType :: Text
   }
   deriving stock Show
@@ -83,7 +84,8 @@ data Volume = Volume
 instance ToJSON Volume where
   toJSON volume =
     object
-      [ "size" .= volume.size
+      [ "name" .= volume.name
+      , "size" .= volume.size
       , "volume_type" .= volume.volumeType
       ]
 
