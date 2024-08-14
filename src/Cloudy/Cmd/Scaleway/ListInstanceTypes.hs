@@ -5,7 +5,7 @@ module Cloudy.Cmd.Scaleway.ListInstanceTypes where
 import Cloudy.Cli.Scaleway (ScalewayListInstanceTypesCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
-import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi)
+import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi, PerPage (PerPage))
 import Cloudy.Table (printTable, Table (..), Align (..))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
@@ -48,11 +48,11 @@ fetchInstanceTypes :: ScalewayListInstanceTypesSettings -> ClientM (Map Text (Pr
 fetchInstanceTypes settings = do
   let authReq = createAuthReq settings.secretKey
       numPerPage = 100
-  ProductServersResp productServers <- productsServersGetApi authReq settings.zone (Just numPerPage)
+  ProductServersResp productServers <- productsServersGetApi authReq settings.zone (Just $ PerPage numPerPage)
   let numProductServers = length $ Map.elems productServers
   when (numProductServers == numPerPage) $
     liftIO $ putStrLn "WARNING: The number of instance types returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
-  ProductServersAvailabilityResp avail <- productsServersAvailabilityGetApi authReq settings.zone (Just numPerPage)
+  ProductServersAvailabilityResp avail <- productsServersAvailabilityGetApi authReq settings.zone (Just $ PerPage numPerPage)
   let numAvail = length $ Map.elems avail
   when (numAvail == numPerPage) $
     liftIO $ putStrLn "WARNING: The number of availabilities returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."

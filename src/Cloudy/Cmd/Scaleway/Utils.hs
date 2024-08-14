@@ -44,3 +44,5 @@ getZone maybeZoneFromConfFile maybeZoneFromCliOpts =
             "Could not parse zone specified in scaleway.defaultZone in config file: " <> zoneFromConfFile
         Just zone -> pure zone
     (Nothing, Nothing) -> pure NL1
+
+-- fetchPaged :: 

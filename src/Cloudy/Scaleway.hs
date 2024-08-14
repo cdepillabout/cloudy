@@ -13,6 +13,21 @@ import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
 import Data.Aeson.Types (Parser)
 import Data.Kind (Type)
 
+newtype PerPage = PerPage { unPerPage :: Int }
+  deriving stock Show
+  deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
+
+newtype PageNum = PageNum { unPageNum :: Int }
+  deriving stock Show
+  deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
+
+type Paged :: forall k l. (k -> l -> Type) -> k -> l -> Type
+type family Paged verb ct resp where
+  Paged verb ct resp =
+    QueryParam "per_page" PerPage :>
+    QueryParam "page" PageNum :>
+    verb ct (Headers '[Header "x-total-count" Int] resp)
+
 data Zone = NL1 | NL2 | NL3
   deriving (Eq, Show)
 
@@ -210,12 +225,6 @@ instance FromJSON Image where
     name <- o .: "name"
     pure Image { id = id', name }
 
-type family Paged (verb :: [Type] -> Type -> Type) ct resp where
-  Paged verb ct resp =
-    QueryParam "per_page" Int :>
-    QueryParam "page" Int :>
-    verb ct (Headers '[Header "x-total-count" Int] resp)
-
 type InstanceIpsPostApi =
   AuthProtect "auth-token" :>
   "instance" :>
@@ -244,7 +253,7 @@ type InstanceProductsServersGetApi =
   Capture "zone" Zone :>
   "products" :>
   "servers" :>
-  QueryParam "per_page" Int :>
+  QueryParam "per_page" PerPage :>
   Get '[JSON] ProductServersResp
 
 type InstanceProductsServersAvailabilityGetApi =
@@ -256,7 +265,7 @@ type InstanceProductsServersAvailabilityGetApi =
   "products" :>
   "servers" :>
   "availability" :>
-  QueryParam "per_page" Int :>
+  QueryParam "per_page" PerPage :>
   Get '[JSON] ProductServersAvailabilityResp
 
 type InstanceImagesGetApi =
@@ -294,21 +303,21 @@ serversPostApi ::
 productsServersGetApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
   Zone ->
-  Maybe Int ->
+  Maybe PerPage ->
   ClientM ProductServersResp
 
 productsServersAvailabilityGetApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
   Zone ->
-  Maybe Int ->
+  Maybe PerPage ->
   ClientM ProductServersAvailabilityResp
 
 imagesGetApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
   Zone ->
   Maybe Text ->
-  Maybe Int ->
-  Maybe Int ->
+  Maybe PerPage ->
+  Maybe PageNum ->
   ClientM (Headers '[Header "x-total-count" Int] ImagesResp)
 
 ipsPostApi

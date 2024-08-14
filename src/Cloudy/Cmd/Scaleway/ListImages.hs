@@ -5,7 +5,7 @@ module Cloudy.Cmd.Scaleway.ListImages where
 import Cloudy.Cli.Scaleway (ScalewayListImagesCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone, runScalewayClientM)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
-import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi)
+import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi, PerPage (PerPage))
 import Cloudy.Table (printTable, Table (..), Align (..))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
@@ -51,21 +51,22 @@ fetchImages :: ScalewayListImagesSettings -> ClientM (Map Text (ProductServer, T
 fetchImages settings = do
   let authReq = createAuthReq settings.secretKey
       numPerPage = 100
-  ProductServersResp productServers <- productsServersGetApi authReq settings.zone (Just numPerPage)
-  let numProductServers = length $ Map.elems productServers
-  when (numProductServers == numPerPage) $
-    liftIO $ putStrLn "WARNING: The number of instance types returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
-  ProductServersAvailabilityResp avail <- productsServersAvailabilityGetApi authReq settings.zone (Just numPerPage)
-  let numAvail = length $ Map.elems avail
-  when (numAvail == numPerPage) $
-    liftIO $ putStrLn "WARNING: The number of availabilities returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
-  pure $
-    merge
-      (mapMissing (\_ prod -> (prod, "UNKNOWN")))
-      dropMissing
-      (zipWithMatched (\_ -> (,)))
-      productServers
-      avail
+  ProductServersResp productServers <- productsServersGetApi authReq settings.zone (Just $ PerPage numPerPage)
+  undefined
+  -- let numProductServers = length $ Map.elems productServers
+  -- when (numProductServers == numPerPage) $
+  --   liftIO $ putStrLn "WARNING: The number of instance types returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
+  -- ProductServersAvailabilityResp avail <- productsServersAvailabilityGetApi authReq settings.zone (Just numPerPage)
+  -- let numAvail = length $ Map.elems avail
+  -- when (numAvail == numPerPage) $
+  --   liftIO $ putStrLn "WARNING: The number of availabilities returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
+  -- pure $
+  --   merge
+  --     (mapMissing (\_ prod -> (prod, "UNKNOWN")))
+  --     dropMissing
+  --     (zipWithMatched (\_ -> (,)))
+  --     productServers
+  --     avail
 
 displayImages :: Map Text (ProductServer, Text) -> IO ()
 displayImages instanceTypes = do

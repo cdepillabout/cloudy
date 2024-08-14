@@ -82,9 +82,11 @@ library
                        NumericUnderscores
                        OverloadedLabels
                        OverloadedStrings
+                       PolyKinds
                        QuasiQuotes
                        RecordWildCards
                        ScopedTypeVariables
+                       StandaloneKindSignatures
                        TupleSections
                        TypeApplications
                        TypeFamilies
