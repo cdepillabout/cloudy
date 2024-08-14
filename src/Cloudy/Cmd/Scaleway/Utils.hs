@@ -1,7 +1,6 @@
 module Cloudy.Cmd.Scaleway.Utils where
 
 import Cloudy.Scaleway (Zone (..), zoneFromText, PageNum (PageNum))
-import Control.Monad.IO.Class (liftIO)
 import Data.Foldable1 (foldl1')
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text, unpack)

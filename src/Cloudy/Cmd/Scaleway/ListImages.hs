@@ -8,16 +8,18 @@ import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (
 import Cloudy.Scaleway (Zone (..), PerPage (PerPage), imagesGetApi, ImagesResp (ImagesResp), Image (..))
 import Cloudy.Table (printTable, Table (..), Align (..))
 import Data.List (sortOn)
-import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty (NonEmpty ((:|)), groupAllWith)
 import Data.Text (Text, isInfixOf, pack, toLower)
 import Servant.Client (ClientM)
 import Data.Time (formatTime, defaultTimeLocale)
+import qualified Data.List.NonEmpty as NE
 
 data ScalewayListImagesSettings = ScalewayListImagesSettings
   { secretKey :: Text
   , zone :: Zone
   , arch :: Text
   , nameFilter :: Maybe Text
+  , showAllVersions :: Bool
   }
 
 mkSettings :: LocalConfFileOpts -> ScalewayListImagesCliOpts -> IO ScalewayListImagesSettings
@@ -26,7 +28,14 @@ mkSettings localConfFileOpts cliOpts = do
   secretKey <- getVal maybeSecretKey "Could not find scaleway.secret_key in config file"
   let maybeZoneFromConfFile = localConfFileOpts.scaleway >>= \scale -> scale.defaultZone
   zone <- getZone maybeZoneFromConfFile cliOpts.zone
-  pure ScalewayListImagesSettings { secretKey, zone, arch = cliOpts.arch, nameFilter = cliOpts.nameFilter }
+  pure
+    ScalewayListImagesSettings
+      { secretKey
+      , zone
+      , arch = cliOpts.arch
+      , nameFilter = cliOpts.nameFilter
+      , showAllVersions = cliOpts.allVersions
+      }
   where
     getVal :: Maybe a -> String -> IO a
     getVal mayVal errMsg = maybe (error errMsg) pure mayVal
@@ -34,35 +43,48 @@ mkSettings localConfFileOpts cliOpts = do
 runListImages :: LocalConfFileOpts -> ScalewayListImagesCliOpts -> IO ()
 runListImages localConfFileOpts scalewayOpts = do
   settings <- mkSettings localConfFileOpts scalewayOpts
-  images <-
+  imgs <-
     runScalewayClientM
       (\err -> error $ "Problem fetching instance types: " <> show err)
       (fetchImages settings)
-  displayImages settings images
+  displayImages settings imgs
 
 fetchImages :: ScalewayListImagesSettings -> ClientM [Image]
 fetchImages settings = do
   let authReq = createAuthReq settings.secretKey
       numPerPage = 100
-  ImagesResp images <-
+  ImagesResp imgs <-
     fetchPagedApi
       (imagesGetApi authReq settings.zone (Just settings.arch) (Just $ PerPage numPerPage))
       (\(ImagesResp images1) (ImagesResp images2) -> ImagesResp $ images1 <> images2)
-      (\(ImagesResp images) -> length images)
-  pure images
+      (\(ImagesResp imgs) -> length imgs)
+  pure imgs
 
 displayImages :: ScalewayListImagesSettings -> [Image] -> IO ()
-displayImages settings images = do
-  let filteredImages =
+displayImages settings imgs = do
+  let nameFilteredImages =
         case settings.nameFilter of
-          Nothing -> images
-          Just name -> filter (\img -> isInfixOf (toLower name) (toLower img.name)) images
-      sortByModDateImages = sortOn (\img -> img.modificationDate) filteredImages
+          Nothing -> imgs
+          Just name -> filter (\img -> isInfixOf (toLower name) (toLower img.name)) imgs
+      volFilteredImages = filter (\img -> img.rootVolType == "unified") nameFilteredImages
+      latestImages =
+        if settings.showAllVersions
+          then volFilteredImages
+          else
+            nubByNameArch volFilteredImages
+      sortByModDateImages = sortOn (\img -> img.modificationDate) latestImages
   case sortByModDateImages of
     [] -> undefined
     (hImg : tImg) -> do
       let imgTable = mkTable (hImg :| tImg)
       printTable imgTable
+
+nubByNameArch :: [Image] -> [Image]
+nubByNameArch imgs =
+  fmap getMostRecent $ groupAllWith (\img -> (img.name, img.arch)) imgs
+  where
+    getMostRecent :: NonEmpty Image -> Image
+    getMostRecent = NE.head . NE.sortWith (\img -> img.modificationDate)
 
 mkTable :: NonEmpty Image -> Table
 mkTable images =

@@ -220,6 +220,10 @@ data Image = Image
   , creationDate :: UTCTime
   , modificationDate :: UTCTime
   , state :: Text
+  , rootVolId :: Text
+  , rootVolName :: Text
+  , rootVolType :: Text
+  , rootVolSize :: Int
   }
   deriving stock Show
 
@@ -232,7 +236,24 @@ instance FromJSON Image where
     creationDate <- o .: "creation_date"
     modificationDate <- o .: "modification_date"
     state <- o .: "state"
-    pure Image { id = id', name, arch, creationDate, modificationDate, state }
+    rootVol <- o .: "root_volume"
+    rootVolId <- rootVol .: "id"
+    rootVolName <- rootVol .: "name"
+    rootVolType <- rootVol .: "volume_type"
+    rootVolSize <- rootVol .: "size"
+    pure
+      Image
+        { id = id'
+        , name
+        , arch
+        , creationDate
+        , modificationDate
+        , state
+        , rootVolId
+        , rootVolName
+        , rootVolType
+        , rootVolSize
+        }
 
 type InstanceIpsPostApi =
   AuthProtect "auth-token" :>

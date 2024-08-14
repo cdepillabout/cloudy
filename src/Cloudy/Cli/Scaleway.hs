@@ -2,7 +2,7 @@
 module Cloudy.Cli.Scaleway where
 
 import Data.Text (Text)
-import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, Alternative ((<|>)))
+import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, Alternative ((<|>)), switch)
 import Cloudy.Cli.Utils (maybeOpt)
 
 data ScalewayCliOpts
@@ -26,6 +26,7 @@ data ScalewayListImagesCliOpts = ScalewayListImagesCliOpts
   { zone :: Maybe Text
   , arch :: Text
   , nameFilter :: Maybe Text
+  , allVersions :: Bool
   }
   deriving stock Show
 
@@ -65,7 +66,8 @@ scalewayListInstanceTypesCliOptsParser :: Parser ScalewayListInstanceTypesCliOpt
 scalewayListInstanceTypesCliOptsParser = ScalewayListInstanceTypesCliOpts <$> zoneParser
 
 scalewayListImagesCliOptsParser :: Parser ScalewayListImagesCliOpts
-scalewayListImagesCliOptsParser = ScalewayListImagesCliOpts <$> zoneParser <*> archParser <*> nameFilterParser
+scalewayListImagesCliOptsParser =
+  ScalewayListImagesCliOpts <$> zoneParser <*> archParser <*> nameFilterParser <*> allVersionsParser
 
 
 zoneParser :: Parser (Maybe Text)
@@ -119,3 +121,11 @@ nameFilterParser = fmap Just innerParser <|> pure Nothing
           metavar "NAME_FILTER" <>
           help "Only show images whose name contains this value, case-insensitive (default: no filter)"
         )
+
+allVersionsParser :: Parser Bool
+allVersionsParser =
+  switch
+    ( long "all-versions" <>
+      short 'a' <>
+      help "List all versions of each image.  By default, only show the latest version for each image name."
+    )
