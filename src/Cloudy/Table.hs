@@ -2,14 +2,14 @@
 module Cloudy.Table where
 
 import Control.Monad (when)
-import Data.List.NonEmpty (NonEmpty, cons, transpose)
+import Data.List.NonEmpty (NonEmpty ((:|)), cons, transpose)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Control.Exception (assert)
 
-data Align = LeftJustified | RightJustified
+data Align = LeftJustified | Centered | RightJustified
 
 data Table = Table
   { tableHeaders :: NonEmpty (Align, Text)
@@ -32,7 +32,7 @@ renderTable headers body =
   let headerTexts = fmap snd headers
       maxWidths = getMaxWidths $ cons headerTexts body
       maxAlignWidths = NonEmpty.zip (fmap fst headers) maxWidths
-      rawHeaders = renderHeaders maxAlignWidths headerTexts
+      rawHeaders = renderHeaders maxWidths headerTexts
       rawBody = renderBody maxAlignWidths body
       fatDiv = renderDiv True maxWidths "="
       skinnyDiv = renderDiv False maxWidths "-"
@@ -52,9 +52,19 @@ renderDiv shouldUseHorizontalDivs maxWidths c =
       rowMiddle = Text.intercalate divider . NonEmpty.toList $ fmap (\width -> Text.replicate width c) maxWidths
   in "|" <> c <> rowMiddle <> c <> "|"
 
-renderHeaders :: NonEmpty (Align, Int) -> NonEmpty Text -> Text
-renderHeaders maxAlignWidths headers =
-  renderRow (zipOneMore maxAlignWidths headers)
+renderHeaders :: NonEmpty Int -> NonEmpty Text -> Text
+renderHeaders maxWidths headers =
+  renderRow (zipThreeNE (Centered :| repeat Centered) maxWidths headers)
+
+zipThreeNE :: NonEmpty a -> NonEmpty b -> NonEmpty c -> NonEmpty (a, b, c)
+zipThreeNE (a :| as) (b :| bs) (c :| cs) = (a,b,c) :| zipThree as bs cs
+
+zipThree :: [a] -> [b] -> [c] -> [(a,b,c)]
+zipThree = \cases
+  [] _ _ -> []
+  _ [] _ -> []
+  _ _ [] -> []
+  (a : as) (b : bs) (c : cs) -> (a,b,c) : zipThree as bs cs
 
 renderBody :: NonEmpty (Align, Int) -> NonEmpty (NonEmpty Text) -> Text
 renderBody maxAlignWidths body =
@@ -75,6 +85,11 @@ renderColumn (align, maxWidth, t) =
       paddedText =
         case align of
           LeftJustified -> t <> Text.replicate remainingLength " "
+          Centered ->
+            let (surroundingLength, extra) = quotRem remainingLength 2
+                leftSpace = Text.replicate surroundingLength " "
+                rightSpace = Text.replicate (surroundingLength + extra) " "
+            in leftSpace <> t <> rightSpace
           RightJustified -> Text.replicate remainingLength " " <> t
   in assert (remainingLength >= 0) paddedText
 
