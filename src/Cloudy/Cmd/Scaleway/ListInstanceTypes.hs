@@ -80,7 +80,7 @@ mkTable instanceTypes =
     { tableHeaders =
         (LeftJustified, "instance type id") :|
         [ (RightJustified, "monthly cost")
-        , (LeftJustified, "architecture")
+        , (LeftJustified, "arch")
         , (RightJustified, "cpus")
         , (RightJustified, "memory")
         , (RightJustified, "bandwidth")

@@ -3,23 +3,15 @@
 module Cloudy.Cmd.Scaleway.ListImages where
 
 import Cloudy.Cli.Scaleway (ScalewayListImagesCliOpts (..))
-import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone, runScalewayClientM, fetchPagedApi)
+import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, fetchPagedApi)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
-import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi, PerPage (PerPage), imagesGetApi, ImagesResp (ImagesResp))
+import Cloudy.Scaleway (Zone (..), PerPage (PerPage), imagesGetApi, ImagesResp (ImagesResp), Image (..))
 import Cloudy.Table (printTable, Table (..), Align (..))
-import Control.Monad (when)
-import Control.Monad.IO.Class (liftIO)
 import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.Map.Merge.Strict (merge, mapMissing, dropMissing, zipWithMatched)
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import Data.Text (Text, pack)
-import Network.HTTP.Client.TLS (newTlsManager)
-import Servant.Client (mkClientEnv, runClientM, ClientM)
-import Text.Printf (printf)
-import qualified Data.Text as Text
-import Text.Pretty.Simple (pPrint)
+import Data.Text (Text, isInfixOf, pack, toLower)
+import Servant.Client (ClientM)
+import Data.Time (formatTime, defaultTimeLocale)
 
 data ScalewayListImagesSettings = ScalewayListImagesSettings
   { secretKey :: Text
@@ -46,9 +38,9 @@ runListImages localConfFileOpts scalewayOpts = do
     runScalewayClientM
       (\err -> error $ "Problem fetching instance types: " <> show err)
       (fetchImages settings)
-  displayImages images
+  displayImages settings images
 
-fetchImages :: ScalewayListImagesSettings -> ClientM (Map Text (ProductServer, Text))
+fetchImages :: ScalewayListImagesSettings -> ClientM [Image]
 fetchImages settings = do
   let authReq = createAuthReq settings.secretKey
       numPerPage = 100
@@ -57,68 +49,43 @@ fetchImages settings = do
       (imagesGetApi authReq settings.zone (Just settings.arch) (Just $ PerPage numPerPage))
       (\(ImagesResp images1) (ImagesResp images2) -> ImagesResp $ images1 <> images2)
       (\(ImagesResp images) -> length images)
-  liftIO $ do
-    pPrint images
-    print $ length images
-  undefined
+  pure images
 
-  -- let numProductServers = length $ Map.elems productServers
-  -- when (numProductServers == numPerPage) $
-  --   liftIO $ putStrLn "WARNING: The number of instance types returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
-  -- ProductServersAvailabilityResp avail <- productsServersAvailabilityGetApi authReq settings.zone (Just numPerPage)
-  -- let numAvail = length $ Map.elems avail
-  -- when (numAvail == numPerPage) $
-  --   liftIO $ putStrLn "WARNING: The number of availabilities returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."
-  -- pure $
-  --   merge
-  --     (mapMissing (\_ prod -> (prod, "UNKNOWN")))
-  --     dropMissing
-  --     (zipWithMatched (\_ -> (,)))
-  --     productServers
-  --     avail
-
-displayImages :: Map Text (ProductServer, Text) -> IO ()
-displayImages instanceTypes = do
-  let instList = Map.toList instanceTypes
-      sortByPriceInstList = sortOn (\(_, (prod, _)) -> prod.monthlyPrice) instList
-  case sortByPriceInstList of
+displayImages :: ScalewayListImagesSettings -> [Image] -> IO ()
+displayImages settings images = do
+  let filteredImages =
+        case settings.nameFilter of
+          Nothing -> images
+          Just name -> filter (\img -> isInfixOf (toLower name) (toLower img.name)) images
+      sortByModDateImages = sortOn (\img -> img.modificationDate) filteredImages
+  case sortByModDateImages of
     [] -> undefined
-    (hInst : tInsts) -> do
-      let instTable = mkTable (hInst :| tInsts)
-      printTable instTable
+    (hImg : tImg) -> do
+      let imgTable = mkTable (hImg :| tImg)
+      printTable imgTable
 
-mkTable :: NonEmpty (Text, (ProductServer, Text)) -> Table
-mkTable instanceTypes =
+mkTable :: NonEmpty Image -> Table
+mkTable images =
   Table
     { tableHeaders =
-        (LeftJustified, "instance type id") :|
-        [ (RightJustified, "monthly cost")
-        , (LeftJustified, "architecture")
-        , (RightJustified, "cpus")
-        , (RightJustified, "memory")
-        , (RightJustified, "bandwidth")
-        , (LeftJustified, "availability")
-        , (LeftJustified, "alt names")
+        (LeftJustified, "image id") :|
+        [ (LeftJustified, "name")
+        , (LeftJustified, "arch")
+        , (LeftJustified, "modify date")
+        -- , (LeftJustified, "create date")
+        , (LeftJustified, "state")
         ]
-    , tableBodyRows = fmap mkRow instanceTypes
+    , tableBodyRows = fmap mkRow images
     }
 
-mkRow :: (Text, (ProductServer, Text)) -> NonEmpty Text
-mkRow (instType, (prod, availability)) =
-  instType :|
-  [ "€" <> pack (printf "% 8.2f" prod.monthlyPrice)
-  , prod.arch
-  , pack $ show prod.ncpus
-  , pack $ printf "% 8.01f gib" (fromIntegral prod.ram / oneGib :: Double)
-  , pack $ printf "% 8.03f gbps" (fromIntegral prod.sumInternetBandwidth / oneGb :: Double)
-  , availability
-  , case prod.altNames of
-      [] -> "(none)"
-      names -> Text.intercalate ", " names
+mkRow :: Image -> NonEmpty Text
+mkRow img =
+  img.id :|
+  [ img.name
+  , img.arch
+  , formatDate img.modificationDate
+  -- , formatDate img.creationDate
+  , img.state
   ]
-
-oneGib :: Num a => a
-oneGib = 1024 * 1024 * 1024
-
-oneGb :: Num a => a
-oneGb = 1000 * 1000 * 1000
+  where
+    formatDate = pack . formatTime defaultTimeLocale "%Y-%m-%d"

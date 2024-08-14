@@ -12,6 +12,7 @@ import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
 import Data.Aeson.Types (Parser)
 import Data.Kind (Type)
+import Data.Time (UTCTime)
 
 newtype PerPage = PerPage { unPerPage :: Int }
   deriving stock Show
@@ -215,6 +216,10 @@ instance FromJSON ImagesResp where
 data Image = Image
   { id :: Text
   , name :: Text
+  , arch :: Text
+  , creationDate :: UTCTime
+  , modificationDate :: UTCTime
+  , state :: Text
   }
   deriving stock Show
 
@@ -223,7 +228,11 @@ instance FromJSON Image where
   parseJSON = withObject "Image" $ \o -> do
     id' <- o .: "id"
     name <- o .: "name"
-    pure Image { id = id', name }
+    arch <- o .: "arch"
+    creationDate <- o .: "creation_date"
+    modificationDate <- o .: "modification_date"
+    state <- o .: "state"
+    pure Image { id = id', name, arch, creationDate, modificationDate, state }
 
 type InstanceIpsPostApi =
   AuthProtect "auth-token" :>
