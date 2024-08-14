@@ -84,6 +84,7 @@ library
                        OverloadedStrings
                        PolyKinds
                        QuasiQuotes
+                       RankNTypes
                        RecordWildCards
                        ScopedTypeVariables
                        StandaloneKindSignatures

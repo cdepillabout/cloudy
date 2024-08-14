@@ -3,9 +3,9 @@
 module Cloudy.Cmd.Scaleway.ListImages where
 
 import Cloudy.Cli.Scaleway (ScalewayListImagesCliOpts (..))
-import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone, runScalewayClientM)
+import Cloudy.Cmd.Scaleway.Utils (createAuthReq, scalewayBaseUrl, getZone, runScalewayClientM, fetchPagedApi)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
-import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi, PerPage (PerPage))
+import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi, PerPage (PerPage), imagesGetApi, ImagesResp (ImagesResp))
 import Cloudy.Table (printTable, Table (..), Align (..))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
@@ -19,6 +19,7 @@ import Network.HTTP.Client.TLS (newTlsManager)
 import Servant.Client (mkClientEnv, runClientM, ClientM)
 import Text.Printf (printf)
 import qualified Data.Text as Text
+import Text.Pretty.Simple (pPrint)
 
 data ScalewayListImagesSettings = ScalewayListImagesSettings
   { secretKey :: Text
@@ -51,8 +52,16 @@ fetchImages :: ScalewayListImagesSettings -> ClientM (Map Text (ProductServer, T
 fetchImages settings = do
   let authReq = createAuthReq settings.secretKey
       numPerPage = 100
-  ProductServersResp productServers <- productsServersGetApi authReq settings.zone (Just $ PerPage numPerPage)
+  ImagesResp images <-
+    fetchPagedApi
+      (imagesGetApi authReq settings.zone (Just settings.arch) (Just $ PerPage numPerPage))
+      (\(ImagesResp images1) (ImagesResp images2) -> ImagesResp $ images1 <> images2)
+      (\(ImagesResp images) -> length images)
+  liftIO $ do
+    pPrint images
+    print $ length images
   undefined
+
   -- let numProductServers = length $ Map.elems productServers
   -- when (numProductServers == numPerPage) $
   --   liftIO $ putStrLn "WARNING: The number of instance types returned is equal to the max per page.  PROPER PAGING NEEDS TO BE IMPLEMENTED! We are likely missing instance types...."

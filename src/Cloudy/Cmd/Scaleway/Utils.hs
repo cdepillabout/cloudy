@@ -1,9 +1,11 @@
-{-# LANGUAGE RankNTypes #-}
 module Cloudy.Cmd.Scaleway.Utils where
 
-import Cloudy.Scaleway (Zone (..), zoneFromText)
+import Cloudy.Scaleway (Zone (..), zoneFromText, PageNum (PageNum))
+import Control.Monad.IO.Class (liftIO)
+import Data.Foldable1 (foldl1')
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text, unpack)
-import Servant.API (AuthProtect)
+import Servant.API (AuthProtect, Headers (Headers), Header, HList (..), ResponseHeader (Header))
 import Servant.Client (BaseUrl (BaseUrl), Scheme (Https), ClientM, ClientError, mkClientEnv, runClientM)
 import Servant.Client.Core (mkAuthenticatedRequest, AuthenticatedRequest, AuthClientData, Request, addHeader)
 import Network.HTTP.Client.TLS (newTlsManager)
@@ -45,4 +47,41 @@ getZone maybeZoneFromConfFile maybeZoneFromCliOpts =
         Just zone -> pure zone
     (Nothing, Nothing) -> pure NL1
 
--- fetchPaged :: 
+fetchPagedApi ::
+  Monad m =>
+  (Maybe PageNum -> m (Headers '[Header "x-total-count" Int] a)) ->
+  (a -> a -> a) ->
+  (a -> Int) ->
+  m a
+fetchPagedApi fetchPage combineResults countResultsOnPage = do
+  Headers page1Res headers <- fetchPage (Just $ PageNum 1)
+  let page1Count = countResultsOnPage page1Res
+  totalCount <-
+    case headers of
+      HCons h HNil ->
+        case h of
+          Header totalCount -> pure totalCount
+          _ -> error "fetchPagedApi: could not find or decode header x-total-count for some reason"
+  if page1Count >= totalCount
+    then pure page1Res
+    else do
+      allRes <-
+        unfoldM
+          (\(currTotal, pageNumToFetch) ->
+            if currTotal >= totalCount
+              then pure Nothing
+              else do
+                Headers pageRes _ <- fetchPage (Just $ PageNum pageNumToFetch)
+                let newTotal = currTotal + countResultsOnPage pageRes
+                    nextPageNum = pageNumToFetch + 1
+                pure $ Just (pageRes, (newTotal, nextPageNum))
+          )
+          (page1Count, 2)
+      pure $ foldl1' combineResults (page1Res :| allRes)
+
+unfoldM :: Monad m => (s -> m (Maybe (a, s))) -> s -> m [a]
+unfoldM f s = do
+  mres <- f s
+  case mres of
+    Nothing -> return []
+    Just (a, s') -> fmap (a :) (unfoldM f s')
