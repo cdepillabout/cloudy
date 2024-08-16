@@ -57,6 +57,7 @@ library
                      , filepath
                      , http-api-data
                      , http-client-tls
+                     , http-media
                      , network-bsd
                      , optparse-applicative
                      , pretty-simple
@@ -78,6 +79,7 @@ library
                        GeneralizedNewtypeDeriving
                        InstanceSigs
                        LambdaCase
+                       MultiParamTypeClasses
                        NamedFieldPuns
                        NumericUnderscores
                        OverloadedLabels

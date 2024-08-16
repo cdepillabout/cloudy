@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE EmptyDataDecls #-}
 
 module Cloudy.Scaleway where
 
@@ -6,13 +7,22 @@ import Data.Aeson (ToJSON(..), object, (.=), FromJSON (..), withObject, Value, (
 import Data.Map.Strict (Map)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Servant.API ((:>), Capture, ReqBody, JSON, Post, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header)
+import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType))
 import Servant.Client (client, ClientM)
 import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
 import Data.Aeson.Types (Parser)
 import Data.Kind (Type)
 import Data.Time (UTCTime)
+import Network.HTTP.Media ((//))
+
+data PlainTextNoUTF8
+
+instance Accept PlainTextNoUTF8 where
+  contentType _ = "text" // "plain"
+
+instance MimeRender PlainTextNoUTF8 Text where
+  mimeRender _ = mimeRender (Proxy @PlainText)
 
 newtype PerPage = PerPage { unPerPage :: Int }
   deriving stock Show
@@ -73,6 +83,15 @@ newtype ProjectId = ProjectId { unProjectId :: Text }
 newtype ServerId = ServerId { unServerId :: Text }
   deriving stock (Eq, Show)
   deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
+
+newtype UserDataKey = UserDataKey { unUserDataKey :: Text }
+  deriving stock (Eq, Show)
+  deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
+
+newtype UserData = UserData { unUserData :: Text }
+  deriving stock (Eq, Show)
+  -- deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
+  deriving newtype (MimeRender PlainTextNoUTF8)
 
 data Volume = Volume
   { name :: Text
@@ -157,10 +176,12 @@ data ServersResp = ServersResp
 instance FromJSON ServersResp where
   parseJSON :: Value -> Parser ServersResp
   parseJSON = withObject "ServersResp outer wrapper" $ \o -> do
-    innerObj <- o .: "servers"
+    innerObj <- o .: "server"
     id_ <- innerObj .: "id"
     name <- innerObj .: "name"
     pure ServersResp { id = id_, name }
+
+
 
 newtype ProductServersResp = ProductServersResp { unProductServersResp :: Map Text ProductServer }
   deriving stock Show
@@ -275,7 +296,20 @@ type InstanceServersPostApi =
   Capture "zone" Zone :>
   "servers" :>
   ReqBody '[JSON] ServersReq :>
-  Post '[JSON] ServersResp
+  PostCreated '[JSON] ServersResp
+
+type InstanceServersUserDataPatchApi =
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "servers" :>
+  Capture "server_id" ServerId :>
+  "user_data" :>
+  Capture "key" UserDataKey :>
+  ReqBody '[PlainText] UserData :>
+  PatchNoContent
 
 type InstanceProductsServersGetApi =
   AuthProtect "auth-token" :>
@@ -313,6 +347,7 @@ type InstanceImagesGetApi =
 type ScalewayApi =
   InstanceIpsPostApi :<|>
   InstanceServersPostApi :<|>
+  InstanceServersUserDataPatchApi :<|>
   InstanceProductsServersGetApi :<|>
   InstanceProductsServersAvailabilityGetApi :<|>
   InstanceImagesGetApi
@@ -331,6 +366,14 @@ serversPostApi ::
   Zone ->
   ServersReq ->
   ClientM ServersResp
+
+serversUserDataPatchApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  ServerId ->
+  UserDataKey ->
+  UserData ->
+  ClientM NoContent
 
 productsServersGetApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
@@ -354,6 +397,7 @@ imagesGetApi ::
 
 ipsPostApi
   :<|> serversPostApi
+  :<|> serversUserDataPatchApi
   :<|> productsServersGetApi
   :<|> productsServersAvailabilityGetApi
   :<|> imagesGetApi = client scalewayApi

@@ -8,6 +8,8 @@ import Servant.API (AuthProtect, Headers (Headers), Header, HList (..), Response
 import Servant.Client (BaseUrl (BaseUrl), Scheme (Https), ClientM, ClientError, mkClientEnv, runClientM)
 import Servant.Client.Core (mkAuthenticatedRequest, AuthenticatedRequest, AuthClientData, Request, addHeader)
 import Network.HTTP.Client.TLS (newTlsManager)
+import Data.Foldable (asum)
+import Data.Maybe (fromMaybe)
 
 createAuthReq :: Text -> AuthenticatedRequest (AuthProtect "auth-token")
 createAuthReq secretKey = mkAuthenticatedRequest secretKey createAuthTokenHeader
@@ -49,15 +51,26 @@ getZone maybeZoneFromConfFile maybeZoneFromCliOpts =
         Just zone -> pure zone
     (Nothing, Nothing) -> pure defaultZone
 
+getMaybeOrDefault :: Foldable t => a -> t (Maybe a) -> a
+getMaybeOrDefault defVal maybes = fromMaybe defVal (asum maybes)
+
 defaultInstanceType :: Text
 defaultInstanceType = "VC1M"
 
 getInstanceType :: Maybe Text -> Maybe Text -> Text
 getInstanceType maybeInstanceTypeFromConfFile maybeInstanceTypeFromCliOpts =
-  case (maybeInstanceTypeFromConfFile, maybeInstanceTypeFromCliOpts) of
-    (_, Just instanceTypeFromCliOpts) -> instanceTypeFromCliOpts
-    (Just instanceTypeFromConfFile, _) -> instanceTypeFromConfFile
-    (Nothing, Nothing) -> defaultInstanceType
+  getMaybeOrDefault
+    defaultInstanceType
+    [maybeInstanceTypeFromCliOpts, maybeInstanceTypeFromConfFile]
+
+defaultImageId :: Text
+defaultImageId = "ubuntu_noble"
+
+getImageId :: Maybe Text -> Maybe Text -> Text
+getImageId maybeImageIdFromConfFile maybeImageIdFromCliOpts =
+  getMaybeOrDefault
+    defaultImageId
+    [maybeImageIdFromCliOpts, maybeImageIdFromConfFile]
 
 fetchPagedApi ::
   Monad m =>

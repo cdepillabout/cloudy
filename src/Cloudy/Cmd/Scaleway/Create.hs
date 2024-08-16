@@ -3,14 +3,15 @@
 module Cloudy.Cmd.Scaleway.Create where
 
 import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
-import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType)
+import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType, getImageId)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.NameGen (instanceNameGen)
-import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ImageId (ImageId), Volume (..))
+import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), Volume (..), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData))
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text)
 import Servant.Client (ClientM)
 import qualified Data.Map.Strict as Map
+import Servant.API (NoContent(NoContent))
 
 data ScalewayCreateSettings = ScalewayCreateSettings
   { secretKey :: Text
@@ -18,6 +19,7 @@ data ScalewayCreateSettings = ScalewayCreateSettings
   , zone :: Zone
   , instanceType :: Text
   , volumeSizeGb :: Int
+  , imageId :: Text
   }
 
 mkSettings :: LocalConfFileOpts -> ScalewayCreateCliOpts -> IO ScalewayCreateSettings
@@ -30,6 +32,8 @@ mkSettings localConfFileOpts cliOpts = do
   zone <- getZone maybeZoneFromConfFile cliOpts.zone
   let maybeInstanceTypeFromConfFile = localConfFileOpts.scaleway >>= \scale -> scale.defaultInstanceType
       instanceType = getInstanceType maybeInstanceTypeFromConfFile cliOpts.instanceType
+  let maybeImageIdFromConfFile = localConfFileOpts.scaleway >>= \scale -> scale.defaultImageId
+      imageId = getImageId maybeImageIdFromConfFile cliOpts.imageId
   pure
     ScalewayCreateSettings
       { secretKey
@@ -37,6 +41,7 @@ mkSettings localConfFileOpts cliOpts = do
       , zone
       , instanceType
       , volumeSizeGb = cliOpts.volumeSizeGb
+      , imageId
       }
   where
     getVal :: Maybe a -> String -> IO a
@@ -59,7 +64,7 @@ runCreate localConfFileOpts scalewayOpts = do
             ServersReq
               { bootType = "local"
               , commercialType = settings.instanceType
-              , image = ImageId "Ubuntu 24.04 Noble Numbat"
+              , image = ImageId settings.imageId
               , name = serverName
               , publicIps = [ipsRes.id]
               , tags = ["cloudy"]
@@ -77,6 +82,12 @@ runCreate localConfFileOpts scalewayOpts = do
               }
       serversResp <- serversPostApi authReq settings.zone serversReq
       liftIO $ putStrLn $ "servers resp: " <> show serversResp
+      let userData =
+            "#!/usr/bin/env bash\
+            \echo 'hello' >> /whatwhat"
+      NoContent <- serversUserDataPatchApi authReq settings.zone serversResp.id (UserDataKey "cloud-init") (UserData userData)
+      liftIO $ putStrLn "hello"
+
 
 oneGb :: Int
 oneGb = 1000 * 1000 * 1000

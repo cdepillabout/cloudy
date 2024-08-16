@@ -15,6 +15,7 @@ data ScalewayCreateCliOpts = ScalewayCreateCliOpts
   { zone :: Maybe Text
   , instanceType :: Maybe Text
   , volumeSizeGb :: Int
+  , imageId :: Maybe Text
   }
   deriving stock Show
 
@@ -62,15 +63,22 @@ scalewayCliOptsParser = hsubparser subParsers
 
 scalewayCreateCliOptsParser :: Parser ScalewayCreateCliOpts
 scalewayCreateCliOptsParser =
-  ScalewayCreateCliOpts <$> zoneParser <*> instanceTypeParser <*> volumeSizeGbParser
+  ScalewayCreateCliOpts
+    <$> zoneParser
+    <*> instanceTypeParser
+    <*> volumeSizeGbParser
+    <*> imageIdParser
 
 scalewayListInstanceTypesCliOptsParser :: Parser ScalewayListInstanceTypesCliOpts
 scalewayListInstanceTypesCliOptsParser = ScalewayListInstanceTypesCliOpts <$> zoneParser
 
 scalewayListImagesCliOptsParser :: Parser ScalewayListImagesCliOpts
 scalewayListImagesCliOptsParser =
-  ScalewayListImagesCliOpts <$> zoneParser <*> archParser <*> nameFilterParser <*> allVersionsParser
-
+  ScalewayListImagesCliOpts
+    <$> zoneParser
+    <*> archParser
+    <*> nameFilterParser
+    <*> allVersionsParser
 
 zoneParser :: Parser (Maybe Text)
 zoneParser =
@@ -142,4 +150,15 @@ volumeSizeGbParser =
       help "Size of the root volume in GBs" <>
       value 50 <>
       showDefault
+    )
+
+imageIdParser :: Parser (Maybe Text)
+imageIdParser =
+  maybeOpt
+    "Scaleway image ID (use `cloudy scaleway list-images` command to get list of possible image IDs). Also can be image label, like \"ubuntu_noble\" (TODO: implement market api to return list of possible labels)"
+    "ubuntu_noble"
+    strOption
+    ( long "image-id" <>
+      short 'i' <>
+      metavar "IMAGE_ID"
     )
