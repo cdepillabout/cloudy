@@ -181,7 +181,32 @@ instance FromJSON ServersResp where
     name <- innerObj .: "name"
     pure ServersResp { id = id_, name }
 
+data ServersActionReq = ServersActionReq
+  { action :: Text
+  }
+  deriving stock Show
 
+instance ToJSON ServersActionReq where
+  toJSON serversActionReq =
+    object
+      [ "action" .= serversActionReq.action
+      ]
+
+data TaskResp = TaskResp
+  { id :: Text
+  , description :: Text
+  , status :: Text
+  }
+  deriving stock Show
+
+instance FromJSON TaskResp where
+  parseJSON :: Value -> Parser TaskResp
+  parseJSON = withObject "TaskResp outer wrapper" $ \o -> do
+    innerObj <- o .: "task"
+    id_ <- innerObj .: "id"
+    description <- innerObj .: "description"
+    status <- innerObj .: "status"
+    pure TaskResp { id = id_, description, status }
 
 newtype ProductServersResp = ProductServersResp { unProductServersResp :: Map Text ProductServer }
   deriving stock Show
@@ -298,6 +323,18 @@ type InstanceServersPostApi =
   ReqBody '[JSON] ServersReq :>
   PostCreated '[JSON] ServersResp
 
+type InstanceServersActionPostApi =
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "servers" :>
+  Capture "server_id" ServerId :>
+  "action" :>
+  ReqBody '[JSON] ServersActionReq :>
+  PostCreated '[JSON] TaskResp
+
 type InstanceServersUserDataPatchApi =
   AuthProtect "auth-token" :>
   "instance" :>
@@ -347,6 +384,7 @@ type InstanceImagesGetApi =
 type ScalewayApi =
   InstanceIpsPostApi :<|>
   InstanceServersPostApi :<|>
+  InstanceServersActionPostApi :<|>
   InstanceServersUserDataPatchApi :<|>
   InstanceProductsServersGetApi :<|>
   InstanceProductsServersAvailabilityGetApi :<|>
@@ -366,6 +404,13 @@ serversPostApi ::
   Zone ->
   ServersReq ->
   ClientM ServersResp
+
+serversActionPostApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  ServerId ->
+  ServersActionReq ->
+  ClientM TaskResp
 
 serversUserDataPatchApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
@@ -397,6 +442,7 @@ imagesGetApi ::
 
 ipsPostApi
   :<|> serversPostApi
+  :<|> serversActionPostApi
   :<|> serversUserDataPatchApi
   :<|> productsServersGetApi
   :<|> productsServersAvailabilityGetApi

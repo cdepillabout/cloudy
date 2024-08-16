@@ -6,7 +6,7 @@ import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType, getImageId)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.NameGen (instanceNameGen)
-import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), Volume (..), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData))
+import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), Volume (..), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi)
 import Control.Monad.IO.Class (liftIO)
 import Data.Text (Text, pack)
 import Servant.Client (ClientM)
@@ -95,7 +95,9 @@ runCreate localConfFileOpts scalewayOpts = do
           (UserDataKey "cloud-init")
           (UserData $ pack userData)
       liftIO $ putStrLn "created user data"
-
+      let act = ServersActionReq { action = "poweron" }
+      task <- serversActionPostApi authReq settings.zone serversResp.id act
+      liftIO $ print task
 
 oneGb :: Int
 oneGb = 1000 * 1000 * 1000
