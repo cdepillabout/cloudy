@@ -308,7 +308,7 @@ type InstanceServersUserDataPatchApi =
   Capture "server_id" ServerId :>
   "user_data" :>
   Capture "key" UserDataKey :>
-  ReqBody '[PlainText] UserData :>
+  ReqBody '[PlainTextNoUTF8] UserData :>
   PatchNoContent
 
 type InstanceProductsServersGetApi =

@@ -8,7 +8,7 @@ import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (
 import Cloudy.NameGen (instanceNameGen)
 import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), Volume (..), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData))
 import Control.Monad.IO.Class (liftIO)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import Servant.Client (ClientM)
 import qualified Data.Map.Strict as Map
 import Servant.API (NoContent(NoContent))
@@ -83,10 +83,18 @@ runCreate localConfFileOpts scalewayOpts = do
       serversResp <- serversPostApi authReq settings.zone serversReq
       liftIO $ putStrLn $ "servers resp: " <> show serversResp
       let userData =
-            "#!/usr/bin/env bash\
-            \echo 'hello' >> /whatwhat"
-      NoContent <- serversUserDataPatchApi authReq settings.zone serversResp.id (UserDataKey "cloud-init") (UserData userData)
-      liftIO $ putStrLn "hello"
+            unlines
+              [ "#!/usr/bin/env bash"
+              , "echo 'hello' >> /whatwhat"
+              ]
+      NoContent <-
+        serversUserDataPatchApi
+          authReq
+          settings.zone
+          serversResp.id
+          (UserDataKey "cloud-init")
+          (UserData $ pack userData)
+      liftIO $ putStrLn "created user data"
 
 
 oneGb :: Int
