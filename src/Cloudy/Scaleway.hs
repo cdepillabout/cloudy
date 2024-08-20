@@ -7,7 +7,7 @@ import Data.Aeson (ToJSON(..), object, (.=), FromJSON (..), withObject, Value, (
 import Data.Map.Strict (Map)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType))
+import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType), PostAccepted)
 import Servant.Client (client, ClientM)
 import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
@@ -357,7 +357,7 @@ type InstanceServersActionPostApi =
   Capture "server_id" ServerId :>
   "action" :>
   ReqBody '[JSON] ServersActionReq :>
-  PostCreated '[JSON] TaskResp
+  PostAccepted '[JSON] TaskResp
 
 type InstanceServersUserDataPatchApi =
   AuthProtect "auth-token" :>
