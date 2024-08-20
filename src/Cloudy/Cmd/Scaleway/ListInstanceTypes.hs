@@ -5,7 +5,7 @@ module Cloudy.Cmd.Scaleway.ListInstanceTypes where
 import Cloudy.Cli.Scaleway (ScalewayListInstanceTypesCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
-import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi, PerPage (PerPage))
+import Cloudy.Scaleway (Zone (..), productsServersGetApi, ProductServersResp (..), ProductServer (..), ProductServersAvailabilityResp (..), productsServersAvailabilityGetApi, PerPage (PerPage), VolumeConstraint (..))
 import Cloudy.Table (printTable, Table (..), Align (..))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
@@ -84,6 +84,7 @@ mkTable instanceTypes =
         , (RightJustified, "cpus")
         , (RightJustified, "memory")
         , (RightJustified, "bandwidth")
+        , (LeftJustified, "vol constraint")
         , (LeftJustified, "availability")
         , (LeftJustified, "alt names")
         ]
@@ -93,16 +94,31 @@ mkTable instanceTypes =
 mkRow :: (Text, (ProductServer, Text)) -> NonEmpty Text
 mkRow (instType, (prod, availability)) =
   instType :|
-  [ "€" <> pack (printf "% 8.2f" prod.monthlyPrice)
+  [ "€" <> pack (printf "%8.2f" prod.monthlyPrice)
   , prod.arch
   , pack $ show prod.ncpus
-  , pack $ printf "% 8.01f gib" (fromIntegral prod.ram / oneGib :: Double)
-  , pack $ printf "% 8.03f gbps" (fromIntegral prod.sumInternetBandwidth / oneGb :: Double)
+  , pack $ printf "%8.01f gib" (fromIntegral prod.ram / oneGib :: Double)
+  , pack $ printf "%8.03f gbps" (fromIntegral prod.sumInternetBandwidth / oneGb :: Double)
+  , formatVolumesConstraint prod.volumesConstraint
   , availability
   , case prod.altNames of
       [] -> "(none)"
       names -> Text.intercalate ", " names
   ]
+
+formatVolumesConstraint :: VolumeConstraint -> Text
+formatVolumesConstraint volConstr =
+  if volConstr.minSize == 0 && volConstr.maxSize == 0
+    then "(none)"
+    else
+      pack $
+        printf
+          "%3d min / %4d max (gb)"
+          (bytesToGigabytes volConstr.minSize)
+          (bytesToGigabytes volConstr.maxSize)
+  where
+    bytesToGigabytes :: Int -> Int
+    bytesToGigabytes bs = round $ fromIntegral bs / (oneGb :: Double)
 
 oneGib :: Num a => a
 oneGib = 1024 * 1024 * 1024

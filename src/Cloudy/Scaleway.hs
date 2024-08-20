@@ -208,7 +208,21 @@ instance FromJSON TaskResp where
     status <- innerObj .: "status"
     pure TaskResp { id = id_, description, status }
 
-newtype ProductServersResp = ProductServersResp { unProductServersResp :: Map Text ProductServer }
+data VolumeConstraint = VolumeConstraint
+  { minSize :: Int
+  , maxSize :: Int
+  }
+  deriving stock Show
+
+instance FromJSON VolumeConstraint where
+  parseJSON :: Value -> Parser VolumeConstraint
+  parseJSON = withObject "VolumeConstraint" $ \o -> do
+    minSize <- o .: "min_size"
+    maxSize <- o .: "max_size"
+    pure VolumeConstraint { minSize, maxSize }
+
+newtype ProductServersResp = ProductServersResp
+  { unProductServersResp :: Map Text ProductServer }
   deriving stock Show
 
 instance FromJSON ProductServersResp where
@@ -224,6 +238,7 @@ data ProductServer = ProductServer
   , arch :: Text
   , sumInternetBandwidth :: Int
   , altNames :: [Text]
+  , volumesConstraint :: VolumeConstraint
   }
   deriving stock Show
 
@@ -235,9 +250,18 @@ instance FromJSON ProductServer where
     ncpus <- o .: "ncpus"
     ram <- o .: "ram"
     arch <- o .: "arch"
+    volumesConstraint <- o .: "volumes_constraint"
     networkObj <- o .: "network"
     sumInternetBandwidth <- networkObj .: "sum_internal_bandwidth"
-    pure ProductServer { monthlyPrice, ncpus, ram, sumInternetBandwidth, arch, altNames }
+    pure ProductServer
+      { monthlyPrice
+      , ncpus
+      , ram
+      , sumInternetBandwidth
+      , arch
+      , altNames
+      , volumesConstraint
+      }
 
 newtype ProductServersAvailabilityResp = ProductServersAvailabilityResp { unProductServersAvailabilityResp :: Map Text Text }
   deriving stock Show
