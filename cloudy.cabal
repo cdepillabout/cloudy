@@ -45,8 +45,10 @@ library
                        Cloudy.Cmd.Scaleway.Utils
                        Cloudy.Cmd.Ssh
                        Cloudy.Cmd.Destroy
+                       Cloudy.Db
                        Cloudy.LocalConfFile
                        Cloudy.NameGen
+                       Cloudy.Path
                        Cloudy.Scaleway
                        Cloudy.Table
   build-depends:       base

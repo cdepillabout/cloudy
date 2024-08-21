@@ -72,9 +72,7 @@ runCreate localConfFileOpts scalewayOpts = do
                   Map.fromList
                     [ ( "0"
                       , ServersReqVolume
-                          -- { name = serverName <> "-boot-block-volume"
-                          { {- name = "System volume"
-                          , -} size = settings.volumeSizeGb * oneGb
+                          { size = settings.volumeSizeGb * oneGb
                           , volumeType = "b_ssd"
                           }
                       )
@@ -85,7 +83,14 @@ runCreate localConfFileOpts scalewayOpts = do
       liftIO $ putStrLn $ "servers resp: " <> show serversResp
       let maybeFirstVol = Map.lookup "0" serversResp.volumes
       firstVol <- maybe (error "couldn't find first volume, unexpected") pure maybeFirstVol
-      serversVolumesResp <- volumesPatchApi authReq settings.zone firstVol.id (VolumesReq "System volume")
+      -- The volume's name has to initial be created as empty (""), and only
+      -- after that can we set the name separately.
+      serversVolumesResp <-
+        volumesPatchApi
+          authReq
+          settings.zone
+          firstVol.id
+          (VolumesReq $ serverName <> "-boot-block-volume")
       liftIO $ putStrLn $ "servers volumes resp: " <> show serversVolumesResp
       let userData =
             unlines

@@ -1,6 +1,7 @@
 
 module Cloudy.LocalConfFile where
 
+import Cloudy.Path (getCloudyConfFilePath)
 import Control.Exception (throwIO)
 import Data.Aeson (FromJSON (parseJSON), withObject, (.:?), Value (Null), Object)
 import Data.Aeson.Types (Parser)
@@ -8,8 +9,6 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import Data.Yaml (decodeEither')
 import System.IO.Error (tryIOError, isDoesNotExistError)
-import System.Directory (getXdgDirectory, XdgDirectory (XdgConfig), createDirectoryIfMissing)
-import System.FilePath ((</>))
 
 data LocalConfFileScalewayOpts = LocalConfFileScalewayOpts
   { accessKey :: Maybe Text
@@ -57,15 +56,9 @@ instance FromJSON LocalConfFileOpts where
 defaultLocalConfFileOpts :: LocalConfFileOpts
 defaultLocalConfFileOpts = LocalConfFileOpts { scaleway = Nothing }
 
-getCloudyLocalConfFilePath :: IO FilePath
-getCloudyLocalConfFilePath = do
-  cloudyConfDirLocal <- getXdgDirectory XdgConfig "cloudy"
-  createDirectoryIfMissing True cloudyConfDirLocal
-  pure $ cloudyConfDirLocal </> "cloudy.yaml"
-
 readLocalConfFile :: IO LocalConfFileOpts
 readLocalConfFile = do
-  confFilePath <- getCloudyLocalConfFilePath
+  confFilePath <- getCloudyConfFilePath
   eitherConfFileRaw <- tryIOError (BS.readFile confFilePath)
   case eitherConfFileRaw of
     Left ioEx
