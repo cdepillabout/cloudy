@@ -6,11 +6,11 @@ import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType, getImageId)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.NameGen (instanceNameGen)
-import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), Volume (..), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi)
+import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi)
 import Control.Monad.IO.Class (liftIO)
+import qualified Data.Map.Strict as Map
 import Data.Text (Text, pack)
 import Servant.Client (ClientM)
-import qualified Data.Map.Strict as Map
 import Servant.API (NoContent(NoContent))
 
 data ScalewayCreateSettings = ScalewayCreateSettings
@@ -71,9 +71,10 @@ runCreate localConfFileOpts scalewayOpts = do
               , volumes =
                   Map.fromList
                     [ ( "0"
-                      , Volume
-                          { name = serverName <> "-boot-block-volume"
-                          , size = settings.volumeSizeGb * oneGb
+                      , ServersReqVolume
+                          -- { name = serverName <> "-boot-block-volume"
+                          { {- name = "System volume"
+                          , -} size = settings.volumeSizeGb * oneGb
                           , volumeType = "b_ssd"
                           }
                       )
@@ -82,6 +83,10 @@ runCreate localConfFileOpts scalewayOpts = do
               }
       serversResp <- serversPostApi authReq settings.zone serversReq
       liftIO $ putStrLn $ "servers resp: " <> show serversResp
+      let maybeFirstVol = Map.lookup "0" serversResp.volumes
+      firstVol <- maybe (error "couldn't find first volume, unexpected") pure maybeFirstVol
+      serversVolumesResp <- volumesPatchApi authReq settings.zone firstVol.id (VolumesReq "System volume")
+      liftIO $ putStrLn $ "servers volumes resp: " <> show serversVolumesResp
       let userData =
             unlines
               [ "#!/usr/bin/env bash"

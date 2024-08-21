@@ -7,7 +7,7 @@ import Data.Aeson (ToJSON(..), object, (.=), FromJSON (..), withObject, Value, (
 import Data.Map.Strict (Map)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType), PostAccepted)
+import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType), PostAccepted, Patch)
 import Servant.Client (client, ClientM)
 import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
@@ -84,6 +84,10 @@ newtype ServerId = ServerId { unServerId :: Text }
   deriving stock (Eq, Show)
   deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
 
+newtype VolumeId = VolumeId { unVolumeId :: Text }
+  deriving stock (Eq, Show)
+  deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
+
 newtype UserDataKey = UserDataKey { unUserDataKey :: Text }
   deriving stock (Eq, Show)
   deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
@@ -93,21 +97,37 @@ newtype UserData = UserData { unUserData :: Text }
   -- deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
   deriving newtype (MimeRender PlainTextNoUTF8)
 
-data Volume = Volume
-  { name :: Text
+data ServersReqVolume = ServersReqVolume
+  { {- name :: Text
+  , -} size :: Int
+  , volumeType :: Text
+  }
+  deriving stock Show
+
+instance ToJSON ServersReqVolume where
+  toJSON volume =
+    object
+      [ {- "name" .= volume.name
+      , -} "size" .= volume.size
+      , "volume_type" .= volume.volumeType
+      ]
+
+data ServersRespVolume = ServersRespVolume
+  { id :: VolumeId
+  , name :: Text
   , size :: Int
   , volumeType :: Text
   }
   deriving stock Show
 
-instance ToJSON Volume where
-  toJSON volume =
-    object
-      [ "name" .= volume.name
-      , "size" .= volume.size
-      , "volume_type" .= volume.volumeType
-      ]
-
+instance FromJSON ServersRespVolume where
+  parseJSON :: Value -> Parser ServersRespVolume
+  parseJSON = withObject "ServersRespVolume" $ \o -> do
+    id_ <- o .: "id"
+    name <- o .: "name"
+    size <- o .: "size"
+    volumeType <- o .: "volume_type"
+    pure ServersRespVolume { id = id_, name, size, volumeType }
 
 data IpsReq = IpsReq
   { type_ :: Text
@@ -149,7 +169,7 @@ data ServersReq = ServersReq
   , name :: Text
   , publicIps :: [IpId]
   , tags :: [Text]
-  , volumes :: Map Text Volume
+  , volumes :: Map Text ServersReqVolume
   , project :: ProjectId
   }
   deriving stock Show
@@ -170,6 +190,7 @@ instance ToJSON ServersReq where
 data ServersResp = ServersResp
   { id :: ServerId
   , name :: Text
+  , volumes :: Map Text ServersRespVolume
   }
   deriving stock Show
 
@@ -179,7 +200,8 @@ instance FromJSON ServersResp where
     innerObj <- o .: "server"
     id_ <- innerObj .: "id"
     name <- innerObj .: "name"
-    pure ServersResp { id = id_, name }
+    volumes <- innerObj .: "volumes"
+    pure ServersResp { id = id_, name, volumes }
 
 data ServersActionReq = ServersActionReq
   { action :: Text
@@ -190,6 +212,17 @@ instance ToJSON ServersActionReq where
   toJSON serversActionReq =
     object
       [ "action" .= serversActionReq.action
+      ]
+
+data VolumesReq = VolumesReq
+  { name :: Text
+  }
+  deriving stock Show
+
+instance ToJSON VolumesReq where
+  toJSON volumesReq =
+    object
+      [ "name" .= volumesReq.name
       ]
 
 data TaskResp = TaskResp
@@ -372,6 +405,17 @@ type InstanceServersUserDataPatchApi =
   ReqBody '[PlainTextNoUTF8] UserData :>
   PatchNoContent
 
+type InstanceVolumesPatchApi =
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "volumes" :>
+  Capture "volume_id" VolumeId :>
+  ReqBody '[JSON] VolumesReq :>
+  Patch '[JSON] Value
+
 type InstanceProductsServersGetApi =
   AuthProtect "auth-token" :>
   "instance" :>
@@ -410,6 +454,7 @@ type ScalewayApi =
   InstanceServersPostApi :<|>
   InstanceServersActionPostApi :<|>
   InstanceServersUserDataPatchApi :<|>
+  InstanceVolumesPatchApi :<|>
   InstanceProductsServersGetApi :<|>
   InstanceProductsServersAvailabilityGetApi :<|>
   InstanceImagesGetApi
@@ -444,6 +489,13 @@ serversUserDataPatchApi ::
   UserData ->
   ClientM NoContent
 
+volumesPatchApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  VolumeId ->
+  VolumesReq ->
+  ClientM Value
+
 productsServersGetApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
   Zone ->
@@ -468,6 +520,7 @@ ipsPostApi
   :<|> serversPostApi
   :<|> serversActionPostApi
   :<|> serversUserDataPatchApi
+  :<|> volumesPatchApi
   :<|> productsServersGetApi
   :<|> productsServersAvailabilityGetApi
   :<|> imagesGetApi = client scalewayApi
