@@ -191,6 +191,7 @@ data ServersResp = ServersResp
   { id :: ServerId
   , name :: Text
   , volumes :: Map Text ServersRespVolume
+  , state :: Text
   }
   deriving stock Show
 
@@ -201,7 +202,8 @@ instance FromJSON ServersResp where
     id_ <- innerObj .: "id"
     name <- innerObj .: "name"
     volumes <- innerObj .: "volumes"
-    pure ServersResp { id = id_, name, volumes }
+    state <- innerObj .: "state"
+    pure ServersResp { id = id_, name, volumes, state }
 
 data ServersActionReq = ServersActionReq
   { action :: Text
@@ -380,6 +382,16 @@ type InstanceServersPostApi =
   ReqBody '[JSON] ServersReq :>
   PostCreated '[JSON] ServersResp
 
+type InstanceServersGetApi =
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "servers" :>
+  Capture "server_id" ServerId :>
+  Get '[JSON] ServersResp
+
 type InstanceServersActionPostApi =
   AuthProtect "auth-token" :>
   "instance" :>
@@ -452,6 +464,7 @@ type InstanceImagesGetApi =
 type ScalewayApi =
   InstanceIpsPostApi :<|>
   InstanceServersPostApi :<|>
+  InstanceServersGetApi :<|>
   InstanceServersActionPostApi :<|>
   InstanceServersUserDataPatchApi :<|>
   InstanceVolumesPatchApi :<|>
@@ -472,6 +485,12 @@ serversPostApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
   Zone ->
   ServersReq ->
+  ClientM ServersResp
+
+serversGetApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  ServerId ->
   ClientM ServersResp
 
 serversActionPostApi ::
@@ -518,6 +537,7 @@ imagesGetApi ::
 
 ipsPostApi
   :<|> serversPostApi
+  :<|> serversGetApi
   :<|> serversActionPostApi
   :<|> serversUserDataPatchApi
   :<|> volumesPatchApi

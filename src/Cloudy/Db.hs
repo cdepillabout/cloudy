@@ -12,6 +12,7 @@ import Data.Time (UTCTime)
 import Database.SQLite.Simple (withConnection, Connection, execute_, Query, query_, FromRow (..), ToRow (..), execute, withTransaction, lastInsertRowId, query, Only (..), field)
 import Database.SQLite.Simple.FromField (FromField)
 import Database.SQLite.Simple.ToField (ToField)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 
 createLocalDatabase :: Connection -> IO ()
 createLocalDatabase conn = do
@@ -20,17 +21,18 @@ createLocalDatabase conn = do
     "CREATE TABLE IF NOT EXISTS cloudy_instance \
     \  ( id INTEGER PRIMARY KEY AUTOINCREMENT \
     \  , name TEXT NOT NULL UNIQUE \
-    \  , created_at DATETIME \
-    \  , deleted_at DATETIME \
+    \  , created_at INTEGER \
+    \  , deleted_at INTEGER \
     \  ) \
-    \STRICT; \
-    \\
-    \CREATE TABLE IF NOT EXISTS scaleway_instance \
+    \STRICT"
+  execute_
+    conn
+    "CREATE TABLE IF NOT EXISTS scaleway_instance \
     \  ( cloudy_instance_id INTEGER NOT NULL UNIQUE \
     \  , scaleway_instance_id TEXT NOT NULL UNIQUE \
     \  , FOREIGN KEY (cloudy_instance_id) REFERENCES cloudy_instance(id) \
     \  ) \
-    \STRICT;"
+    \STRICT"
 
 withCloudyDb :: (Connection -> IO ()) -> IO ()
 withCloudyDb action = do
@@ -153,13 +155,16 @@ newScalewayInstance conn creationTime cloudyInstanceId scalewayInstanceId =
       "UPDATE cloudy_instance \
       \SET created_at = ? \
       \WHERE id = ?"
-      (creationTime, cloudyInstanceId)
+      (utcTimeToSqliteInt creationTime, cloudyInstanceId)
     execute
       conn
       "INSERT INTO scaleway_instance \
       \(cloudy_instance_id, scaleway_instance_id) \
       \VALUES (?, ?)"
       ScalewayInstance { cloudyInstanceId, scalewayInstanceId }
+
+utcTimeToSqliteInt :: UTCTime -> Int64
+utcTimeToSqliteInt = round . utcTimeToPOSIXSeconds
 
 -- insertScalewayServer :: Connection -> Scaleway.ServerId -> Text -> IO ()
 -- insertScalewayServer conn scalewayServerId serverName = withTransaction $ do

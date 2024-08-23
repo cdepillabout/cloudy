@@ -6,13 +6,14 @@ import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType, getImageId)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Db (newCloudyInstance, newScalewayInstance, withCloudyDb)
-import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId)
+import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text, pack)
 import Data.Time (getCurrentTime)
 import Servant.Client (ClientM)
 import Servant.API (NoContent(NoContent))
+import Control.Monad (when)
 
 data ScalewayCreateSettings = ScalewayCreateSettings
   { secretKey :: Text
@@ -55,9 +56,14 @@ runCreate localConfFileOpts scalewayOpts = do
     (cloudyInstanceId, instanceName) <- newCloudyInstance conn
     currentTime <- getCurrentTime
     scalewayServerId <- runScalewayClientM
-      (\err -> error $ "ERROR! Problem creating image: " <> show err)
+      (\err -> error $ "ERROR! Problem creating instance: " <> show err)
       (createScalewayServer settings instanceName)
     newScalewayInstance conn currentTime cloudyInstanceId (unServerId scalewayServerId)
+    putStrLn "Waiting for Scaleway instance to become available..."
+    runScalewayClientM
+      (\err -> error $ "ERROR! Problem waiting for instance to be ready: " <> show err)
+      (waitForScalewayServer settings scalewayServerId)
+    putStrLn "Scaleway instance now available."
 
 createScalewayServer :: ScalewayCreateSettings -> Text -> ClientM ServerId
 createScalewayServer settings instanceName = do
@@ -67,9 +73,9 @@ createScalewayServer settings instanceName = do
   let serversReq =
         ServersReq
           { bootType = "local"
-          , commercialType = "cloudy-" <> settings.instanceType
+          , commercialType = settings.instanceType
           , image = ImageId settings.imageId
-          , name = instanceName
+          , name = "cloudy-" <> instanceName
           , publicIps = [ipsRes.id]
           , tags = ["cloudy"]
           , volumes =
@@ -113,6 +119,13 @@ createScalewayServer settings instanceName = do
   task <- serversActionPostApi authReq settings.zone serversResp.id act
   liftIO $ print task
   pure serversResp.id
+
+waitForScalewayServer :: ScalewayCreateSettings -> ServerId -> ClientM ()
+waitForScalewayServer settings serverId = do
+  let authReq = createAuthReq settings.secretKey
+  serversResp <- serversGetApi authReq settings.zone serverId
+  when (serversResp.state /= "running") $ waitForScalewayServer settings serverId
+
 
 oneGb :: Int
 oneGb = 1000 * 1000 * 1000
