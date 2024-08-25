@@ -6,7 +6,7 @@ import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType, getImageId)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Db (newCloudyInstance, newScalewayInstance, withCloudyDb)
-import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi, IpId, unIpId)
+import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi, IpId, unIpId, zoneToText)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text, pack)
@@ -62,6 +62,7 @@ runCreate localConfFileOpts scalewayOpts = do
       conn
       currentTime
       cloudyInstanceId
+      (zoneToText settings.zone)
       (unServerId scalewayServerId)
       (unIpId scalewayIpId)
       scalewayIpAddr

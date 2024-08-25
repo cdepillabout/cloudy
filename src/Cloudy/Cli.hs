@@ -12,9 +12,12 @@ module Cloudy.Cli
 
 import Cloudy.Cli.Aws (AwsCliOpts(..), awsCliOptsParser)
 import Cloudy.Cli.Scaleway (ScalewayCliOpts(..), scalewayCliOptsParser)
+import Cloudy.Db (CloudyInstanceId (..))
+import Data.Text (Text)
 import Options.Applicative
   ( Alternative((<|>)), Parser, (<**>), command, fullDesc, header, info
-  , progDesc, execParser, helper, hsubparser, ParserInfo )
+  , progDesc, execParser, helper, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto )
+import Options.Applicative.Builder (footer)
 
 data CliCmd
   = Aws AwsCliOpts
@@ -31,6 +34,9 @@ data SshCliOpts = SshCliOpts
   deriving stock Show
 
 data DestroyCliOpts = DestroyCliOpts
+  { id :: Maybe CloudyInstanceId
+  , name :: Maybe Text
+  }
   deriving stock Show
 
 parseCliOpts :: IO CliCmd
@@ -85,7 +91,15 @@ cliCmdParser = hsubparser subParsers <|> list
         "destroy"
         ( info
             (fmap Destroy destroyCliOptsParser)
-            (progDesc "Destroy currently running compute instance")
+            ( progDesc "Destroy currently running compute instance" <>
+              footer
+                "If neither a CLOUDY_INSTANCE_ID nor a CLOUDY_INSTANCE_NAME is \
+                \specified, AND there is only a single active Cloudy Instance, \
+                \it will be used.  Otherwise, you must specify either \
+                \CLOUDY_INSTANCE_ID  or CLOUDY_INSTANCE_NAME, but not both. \
+                \Use `cloudy list` to get a list of all active instances ids \
+                \and names."
+            )
         )
 
     list = fmap List listCliOptsParser
@@ -97,4 +111,30 @@ sshCliOptsParser :: Parser SshCliOpts
 sshCliOptsParser = pure SshCliOpts
 
 destroyCliOptsParser :: Parser DestroyCliOpts
-destroyCliOptsParser = pure DestroyCliOpts
+destroyCliOptsParser =
+  DestroyCliOpts
+    <$> cloudyInstanceIdParser
+    <*> cloudyInstanceNameParser
+
+cloudyInstanceIdParser :: Parser (Maybe CloudyInstanceId)
+cloudyInstanceIdParser = fmap (Just . CloudyInstanceId) innerParser <|> pure Nothing
+  where
+    innerParser =
+      option
+        auto
+        ( long "id" <>
+          short 'i' <>
+          metavar "CLOUDY_INSTANCE_ID" <>
+          help "Cloudy instance ID to operate on."
+        )
+
+cloudyInstanceNameParser :: Parser (Maybe Text)
+cloudyInstanceNameParser = fmap Just innerParser <|> pure Nothing
+  where
+    innerParser =
+      strOption
+        ( long "name" <>
+          short 'n' <>
+          metavar "CLOUDY_INSTANCE_NAME" <>
+          help "Cloudy instance name to operate on."
+        )

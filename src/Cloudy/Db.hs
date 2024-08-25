@@ -29,9 +29,10 @@ createLocalDatabase conn = do
     conn
     "CREATE TABLE IF NOT EXISTS scaleway_instance \
     \  ( cloudy_instance_id INTEGER NOT NULL UNIQUE \
+    \  , scaleway_zone TEXT NOT NULL \
     \  , scaleway_instance_id TEXT NOT NULL UNIQUE \
     \  , scaleway_ip_id TEXT NOT NULL UNIQUE \
-    \  , scaleway_ip_address TEXT NOT NULL UNIQUE \
+    \  , scaleway_ip_address TEXT NOT NULL \
     \  , FOREIGN KEY (cloudy_instance_id) REFERENCES cloudy_instance(id) \
     \  ) \
     \STRICT"
@@ -102,6 +103,7 @@ instance FromRow CloudyInstance where
 
 data ScalewayInstance = ScalewayInstance
   { cloudyInstanceId :: CloudyInstanceId
+  , scalewayZone :: Text
   , scalewayInstanceId :: Text
   , scalewayIpId :: Text
   , scalewayIpAddress :: Text
@@ -111,14 +113,15 @@ data ScalewayInstance = ScalewayInstance
 instance FromRow ScalewayInstance where
   fromRow = do
     cloudyInstanceId <- field
+    scalewayZone <- field
     scalewayInstanceId <- field
     scalewayIpId <- field
     scalewayIpAddress <- field
-    pure $ ScalewayInstance { cloudyInstanceId, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
+    pure $ ScalewayInstance { cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
 
 instance ToRow ScalewayInstance where
-  toRow ScalewayInstance {cloudyInstanceId, scalewayInstanceId} =
-    toRow (cloudyInstanceId, scalewayInstanceId)
+  toRow ScalewayInstance {cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress} =
+    toRow (cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress)
 
 newCloudyInstance :: Connection -> IO (CloudyInstanceId, Text)
 newCloudyInstance conn = withTransaction conn go
@@ -156,6 +159,8 @@ newScalewayInstance ::
   Connection ->
   UTCTime ->
   CloudyInstanceId ->
+  -- | Scaleway Zone
+  Text ->
   -- | Scaleway Instance Id
   Text ->
   -- | Scaleway IP Id
@@ -163,7 +168,7 @@ newScalewayInstance ::
   -- | Scaleway IP Address
   Text ->
   IO ()
-newScalewayInstance conn creationTime cloudyInstanceId scalewayInstanceId scalewayIpId scalewayIpAddress =
+newScalewayInstance conn creationTime cloudyInstanceId scalewayZone scalewayInstanceId scalewayIpId scalewayIpAddress =
   withTransaction conn $ do
     execute
       conn
@@ -174,41 +179,9 @@ newScalewayInstance conn creationTime cloudyInstanceId scalewayInstanceId scalew
     execute
       conn
       "INSERT INTO scaleway_instance \
-      \(cloudy_instance_id, scaleway_instance_id, scaleway_ip_id, scaleway_ip_address) \
-      \VALUES (?, ?, ?, ?)"
-      ScalewayInstance { cloudyInstanceId, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
+      \(cloudy_instance_id, scaleway_zone scaleway_instance_id, scaleway_ip_id, scaleway_ip_address) \
+      \VALUES (?, ?, ?, ?, ?)"
+      ScalewayInstance { cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
 
 utcTimeToSqliteInt :: UTCTime -> Int64
 utcTimeToSqliteInt = round . utcTimeToPOSIXSeconds
-
--- insertScalewayServer :: Connection -> Scaleway.ServerId -> Text -> IO ()
--- insertScalewayServer conn scalewayServerId serverName = withTransaction $ do
---   execute
---     conn
---     "INSERT INTO cloudy_instance \
---     \(name) \
---     \VALUES (?)"
---     serverName
-
--- insertLocalObservation :: Connection -> LocalObservation -> IO ()
--- insertLocalObservation conn =
---   execute
---     conn
---     "INSERT INTO idle_times \
---     \(client_uuid, timestamp, idle_time_milli, hostname) \
---     \VALUES (?,?,?,?)"
-
--- insertNewObsFromServer :: Connection -> [ObsFromServer] -> IO ()
--- insertNewObsFromServer conn obsFromServer =
---   executeMany
---     conn
---     -- TODO: is ignoring a conflict the best thing to do here???
---     -- Or maybe I need to replace it?
---     -- It looks like SQLite has upsert functionality as well??
---     -- https://www.sqlite.org/lang_upsert.html
---     "INSERT OR IGNORE INTO idle_times \
---     \(server_id, client_uuid, timestamp, idle_time_milli, hostname) \
---     \VALUES (?,?,?,?,?)"
---     (fmap toDb obsFromServer)
---   where
---     toDb (ObsFromServer servId uuid ts idle host) = (servId, UUID.toText uuid, ts, idle, host)
