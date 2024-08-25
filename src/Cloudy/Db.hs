@@ -30,6 +30,8 @@ createLocalDatabase conn = do
     "CREATE TABLE IF NOT EXISTS scaleway_instance \
     \  ( cloudy_instance_id INTEGER NOT NULL UNIQUE \
     \  , scaleway_instance_id TEXT NOT NULL UNIQUE \
+    \  , scaleway_ip_id TEXT NOT NULL UNIQUE \
+    \  , scaleway_ip_address TEXT NOT NULL UNIQUE \
     \  , FOREIGN KEY (cloudy_instance_id) REFERENCES cloudy_instance(id) \
     \  ) \
     \STRICT"
@@ -101,6 +103,8 @@ instance FromRow CloudyInstance where
 data ScalewayInstance = ScalewayInstance
   { cloudyInstanceId :: CloudyInstanceId
   , scalewayInstanceId :: Text
+  , scalewayIpId :: Text
+  , scalewayIpAddress :: Text
   }
   deriving stock (Eq, Show)
 
@@ -108,7 +112,9 @@ instance FromRow ScalewayInstance where
   fromRow = do
     cloudyInstanceId <- field
     scalewayInstanceId <- field
-    pure $ ScalewayInstance { cloudyInstanceId, scalewayInstanceId }
+    scalewayIpId <- field
+    scalewayIpAddress <- field
+    pure $ ScalewayInstance { cloudyInstanceId, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
 
 instance ToRow ScalewayInstance where
   toRow ScalewayInstance {cloudyInstanceId, scalewayInstanceId} =
@@ -147,8 +153,17 @@ findCloudyInstanceByName conn cloudyInstanceName = do
       (Only cloudyInstanceName)
 
 newScalewayInstance ::
-  Connection -> UTCTime -> CloudyInstanceId -> Text -> IO ()
-newScalewayInstance conn creationTime cloudyInstanceId scalewayInstanceId =
+  Connection ->
+  UTCTime ->
+  CloudyInstanceId ->
+  -- | Scaleway Instance Id
+  Text ->
+  -- | Scaleway IP Id
+  Text ->
+  -- | Scaleway IP Address
+  Text ->
+  IO ()
+newScalewayInstance conn creationTime cloudyInstanceId scalewayInstanceId scalewayIpId scalewayIpAddress =
   withTransaction conn $ do
     execute
       conn
@@ -159,9 +174,9 @@ newScalewayInstance conn creationTime cloudyInstanceId scalewayInstanceId =
     execute
       conn
       "INSERT INTO scaleway_instance \
-      \(cloudy_instance_id, scaleway_instance_id) \
-      \VALUES (?, ?)"
-      ScalewayInstance { cloudyInstanceId, scalewayInstanceId }
+      \(cloudy_instance_id, scaleway_instance_id, scaleway_ip_id, scaleway_ip_address) \
+      \VALUES (?, ?, ?, ?)"
+      ScalewayInstance { cloudyInstanceId, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
 
 utcTimeToSqliteInt :: UTCTime -> Int64
 utcTimeToSqliteInt = round . utcTimeToPOSIXSeconds
