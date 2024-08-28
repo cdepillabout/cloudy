@@ -13,6 +13,7 @@ import Database.SQLite.Simple (withConnection, Connection, execute_, Query, quer
 import Database.SQLite.Simple.FromField (FromField)
 import Database.SQLite.Simple.ToField (ToField)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Data.Void (Void)
 
 createLocalDatabase :: Connection -> IO ()
 createLocalDatabase conn = do
@@ -73,13 +74,24 @@ data QuerySingleErr = QuerySingleErr Query String
   deriving stock (Eq, Show)
   deriving anyclass (Exception)
 
-querySingle_ :: FromRow a => Connection -> Query -> IO a
-querySingle_ conn q = do
+querySingleErr_ :: FromRow a => Connection -> Query -> IO a
+querySingleErr_ conn q = do
   res <- query_ conn q
   case res of
     [] -> throwIO $ QuerySingleErr q "query returned NO results, expecting exactly one"
     [a] -> pure a
     _:_ -> throwIO $ QuerySingleErr q "query returned multiple results, expecting exactly one"
+
+data OnlyOne a = OnlyOne a | MultipleExist | NoneExist
+  deriving stock (Functor, Show)
+
+querySingle_ :: FromRow a => Connection -> Query -> IO (OnlyOne a)
+querySingle_ conn q = do
+  res <- query_ conn q
+  case res of
+    [] -> pure NoneExist
+    [a] -> pure $ OnlyOne a
+    _:_ -> pure MultipleExist
 
 newtype CloudyInstanceId = CloudyInstanceId { unCloudyInstanceId :: Int64 }
   deriving stock (Eq, Show)
@@ -123,13 +135,18 @@ instance ToRow ScalewayInstance where
   toRow ScalewayInstance {cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress} =
     toRow (cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress)
 
+data InstanceInfo
+  = CloudyScalewayInstance (CloudyInstance, ScalewayInstance)
+  | CloudyAwsInstance (CloudyInstance, Void {- TODO: actually implement AWS stuff -})
+  deriving stock Show
+
 newCloudyInstance :: Connection -> IO (CloudyInstanceId, Text)
 newCloudyInstance conn = withTransaction conn go
   where
     go :: IO (CloudyInstanceId, Text)
     go = do
       possibleName <- instanceNameGen
-      maybeInstance <- findCloudyInstanceByName conn possibleName
+      maybeInstance <- findCloudyInstanceByNameWithDeleted conn possibleName
       case maybeInstance of
         -- No instance exists with this name yet. Insert a new blank instance.
         Nothing -> do
@@ -144,8 +161,10 @@ newCloudyInstance conn = withTransaction conn go
         -- An instance already exists with this name, try again.
         Just _ -> go
 
-findCloudyInstanceByName :: Connection -> Text -> IO (Maybe CloudyInstance)
-findCloudyInstanceByName conn cloudyInstanceName = do
+-- | Return a cloudy instance matching the given name.
+-- This will return an instance even if it has already been deleted.
+findCloudyInstanceByNameWithDeleted :: Connection -> Text -> IO (Maybe CloudyInstance)
+findCloudyInstanceByNameWithDeleted conn cloudyInstanceName = do
   listToMaybe <$>
     query
       conn
@@ -153,6 +172,16 @@ findCloudyInstanceByName conn cloudyInstanceName = do
       \FROM cloudy_instance \
       \WHERE name == ? \
       \ORDER BY id"
+      (Only cloudyInstanceName)
+
+findCloudyInstanceIdByName :: Connection -> Text -> IO (Maybe CloudyInstanceId)
+findCloudyInstanceIdByName conn cloudyInstanceName = do
+  fmap fromOnly . listToMaybe <$>
+    query
+      conn
+      "SELECT id \
+      \FROM cloudy_instance \
+      \WHERE name == ? AND deleted_at IS NOT NULL"
       (Only cloudyInstanceName)
 
 newScalewayInstance ::
@@ -183,5 +212,23 @@ newScalewayInstance conn creationTime cloudyInstanceId scalewayZone scalewayInst
       \VALUES (?, ?, ?, ?, ?)"
       ScalewayInstance { cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
 
+-- | Return a single CloudyInstanceId if there is exactly one in the database that
+-- is not already deleted.
+findOnlyOneInstanceId :: Connection -> IO (OnlyOne CloudyInstanceId)
+findOnlyOneInstanceId conn = do
+  onlyOneInstId <-
+    querySingle_
+      conn
+      "SELECT id \
+      \FROM cloudy_instance \
+      \WHERE deleted_at IS NOT NULL"
+  pure $ fmap fromOnly onlyOneInstId
+
 utcTimeToSqliteInt :: UTCTime -> Int64
 utcTimeToSqliteInt = round . utcTimeToPOSIXSeconds
+
+assertDbInvariants :: Connection -> IO ()
+assertDbInvariants conn = undefined
+
+instanceInfoForId :: Connection -> CloudyInstanceId -> IO (Maybe InstanceInfo)
+instanceInfoForId conn cloudyInstanceId = do

@@ -75,6 +75,7 @@ library
   ghc-options:         -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates
   default-extensions:  DataKinds
                        DeriveDataTypeable
+                       DeriveFunctor
                        DeriveGeneric
                        DerivingStrategies
                        DuplicateRecordFields

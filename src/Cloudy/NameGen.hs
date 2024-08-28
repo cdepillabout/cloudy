@@ -3,7 +3,6 @@ module Cloudy.NameGen where
 
 import Data.Text (Text)
 import System.Random (randomRIO)
-import Database.SQLite.Simple (Connection)
 
 nameWords :: [Text]
 nameWords =
