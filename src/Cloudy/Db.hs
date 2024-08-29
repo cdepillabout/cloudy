@@ -6,7 +6,7 @@ import Cloudy.NameGen (instanceNameGen)
 import Cloudy.Path (getCloudyDbPath)
 import Control.Exception (Exception, throwIO)
 import Data.Int (Int64)
-import Data.Maybe (listToMaybe)
+import Data.Maybe (listToMaybe, catMaybes)
 import Data.Text (Text)
 import Data.Time (UTCTime)
 import Database.SQLite.Simple (withConnection, Connection, execute_, Query, query_, FromRow (..), ToRow (..), execute, withTransaction, lastInsertRowId, query, Only (..), field)
@@ -14,6 +14,9 @@ import Database.SQLite.Simple.FromField (FromField)
 import Database.SQLite.Simple.ToField (ToField)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Void (Void)
+import Data.Traversable (for)
+import Control.Applicative (asum)
+import Data.Foldable (fold)
 
 createLocalDatabase :: Connection -> IO ()
 createLocalDatabase conn = do
@@ -74,24 +77,35 @@ data QuerySingleErr = QuerySingleErr Query String
   deriving stock (Eq, Show)
   deriving anyclass (Exception)
 
-querySingleErr_ :: FromRow a => Connection -> Query -> IO a
+querySingleErr_ :: FromRow r => Connection -> Query -> IO r
 querySingleErr_ conn q = do
-  res <- query_ conn q
-  case res of
-    [] -> throwIO $ QuerySingleErr q "query returned NO results, expecting exactly one"
-    [a] -> pure a
-    _:_ -> throwIO $ QuerySingleErr q "query returned multiple results, expecting exactly one"
+  onlyOneRes <- querySingle_ conn q
+  case onlyOneRes of
+    OnlyOne r -> pure r
+    NoneExist -> throwIO $ QuerySingleErr q "query returned NO results, expecting exactly one"
+    MultipleExist -> throwIO $ QuerySingleErr q "query returned multiple results, expecting exactly one"
 
-data OnlyOne a = OnlyOne a | MultipleExist | NoneExist
+data OnlyOne r = OnlyOne r | MultipleExist | NoneExist
   deriving stock (Functor, Show)
 
-querySingle_ :: FromRow a => Connection -> Query -> IO (OnlyOne a)
+querySingle_ :: FromRow r => Connection -> Query -> IO (OnlyOne r)
 querySingle_ conn q = do
   res <- query_ conn q
   case res of
     [] -> pure NoneExist
-    [a] -> pure $ OnlyOne a
+    [r] -> pure $ OnlyOne r
     _:_ -> pure MultipleExist
+
+
+-- | Query on a column with a UNIQUE constraint.  Throws an exception if
+-- multiple values are returned.
+queryUnique :: (ToRow a, FromRow r) => Connection -> Query -> a -> IO (Maybe r)
+queryUnique conn q a = do
+  res <- query conn q a
+  case res of
+    [] -> pure Nothing
+    [r] -> pure $ Just r
+    _:_ -> error "queryUnique: expecting only a single result at most, but got multiple results.  Is there really a UNIQUE constraint here?"
 
 newtype CloudyInstanceId = CloudyInstanceId { unCloudyInstanceId :: Int64 }
   deriving stock (Eq, Show)
@@ -181,8 +195,18 @@ findCloudyInstanceIdByName conn cloudyInstanceName = do
       conn
       "SELECT id \
       \FROM cloudy_instance \
-      \WHERE name == ? AND deleted_at IS NOT NULL"
+      \WHERE name == ? AND deleted_at IS NULL"
       (Only cloudyInstanceName)
+
+findCloudyInstanceById :: Connection -> CloudyInstanceId -> IO (Maybe CloudyInstance)
+findCloudyInstanceById conn cloudyInstanceId = do
+  listToMaybe <$>
+    query
+      conn
+      "SELECT id, name, created_at, deleted_at \
+      \FROM cloudy_instance \
+      \WHERE id == ? AND deleted_at IS NULL AND created_at IS NOT NULL"
+      (Only cloudyInstanceId)
 
 newScalewayInstance ::
   Connection ->
@@ -227,8 +251,43 @@ findOnlyOneInstanceId conn = do
 utcTimeToSqliteInt :: UTCTime -> Int64
 utcTimeToSqliteInt = round . utcTimeToPOSIXSeconds
 
+data DbInvariantErr
+  = CloudyInstanceHasNoProviderInstance CloudyInstanceId
+  | CloudyInstanceHasMultipleProviderInstances CloudyInstanceId
+  deriving stock Show
+
 assertDbInvariants :: Connection -> IO ()
-assertDbInvariants conn = undefined
+assertDbInvariants conn = withTransaction conn $ do
+  invariantErrors :: [DbInvariantErr] <-
+    fold
+      [ invariantEveryCloudyInstHasExactlyOneProviderInst conn
+      ]
+  error $
+    "assertDbInvariants: DB invariants have been violated: " <> show invariantErrors
+
+-- | There needs to be EXACTLY ONE corresponding cloud provider instance for each
+-- cloudy instance.
+invariantEveryCloudyInstHasExactlyOneProviderInst :: Connection -> IO [DbInvariantErr]
+invariantEveryCloudyInstHasExactlyOneProviderInst conn = do
+  allCloudyInstIds <- fmap fromOnly <$> query_ conn "SELECT id FROM cloudy_instance"
+  maybeErrs <- for allCloudyInstIds checkCloudyInstProviders
+  pure $ catMaybes maybeErrs
+  where
+    checkCloudyInstProviders :: CloudyInstanceId -> IO (Maybe DbInvariantErr)
+    checkCloudyInstProviders cloudyInstId = do
+    maybeScalewayInstId :: Maybe Text <-
+      fmap fromOnly <$>
+        queryUnique
+          conn
+          "SELECT scaleway_instance_id \
+          \FROM scaleway_instance \
+          \WHERE cloudy_instance_id == ?"
+          (Only cloudyInstId)
+    case maybeScalewayInstId of
+      Just _scalewayInstId -> pure Nothing
+      Nothing -> pure $ Just $ CloudyInstanceHasNoProviderInstance cloudyInstId
+
 
 instanceInfoForId :: Connection -> CloudyInstanceId -> IO (Maybe InstanceInfo)
 instanceInfoForId conn cloudyInstanceId = do
+  undefined
