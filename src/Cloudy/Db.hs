@@ -46,7 +46,11 @@ withCloudyDb action = do
   dcutDbPath <- getCloudyDbPath
   withSqliteConn dcutDbPath $ \conn -> do
     createLocalDatabase conn
+    -- TODO: Maybe create some sort of production build that doesn't check
+    -- the invariants.
+    assertDbInvariants conn
     action conn
+    assertDbInvariants conn
 
 withSqliteConn :: FilePath -> (Connection -> IO ()) -> IO ()
 withSqliteConn dbPath action =
@@ -261,6 +265,7 @@ assertDbInvariants conn = withTransaction conn $ do
   invariantErrors :: [DbInvariantErr] <-
     fold
       [ invariantEveryCloudyInstHasExactlyOneProviderInst conn
+      , invariantCloudyInstCorectDates conn
       ]
   error $
     "assertDbInvariants: DB invariants have been violated: " <> show invariantErrors
@@ -287,6 +292,10 @@ invariantEveryCloudyInstHasExactlyOneProviderInst conn = do
       Just _scalewayInstId -> pure Nothing
       Nothing -> pure $ Just $ CloudyInstanceHasNoProviderInstance cloudyInstId
 
+-- | Cloudy instances should always have a @created_at@ value that is non-null.
+invariantCloudyInstCorectDates :: Connection -> IO [DbInvariantErr]
+invariantCloudyInstCorectDates conn = do
+  undefined
 
 instanceInfoForId :: Connection -> CloudyInstanceId -> IO (Maybe InstanceInfo)
 instanceInfoForId conn cloudyInstanceId = do
