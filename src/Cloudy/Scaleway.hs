@@ -7,7 +7,7 @@ import Data.Aeson (ToJSON(..), object, (.=), FromJSON (..), withObject, Value, (
 import Data.Map.Strict (Map)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType), PostAccepted, Patch)
+import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType), PostAccepted, Patch, DeleteNoContent)
 import Servant.Client (client, ClientM)
 import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
@@ -59,7 +59,6 @@ zoneFromText = \case
   "nl-ams-3" -> Just NL3
   _ -> Nothing
 
-
 instance ToHttpApiData Zone where
   toUrlPiece :: Zone -> Text
   toUrlPiece = zoneToText
@@ -94,7 +93,6 @@ newtype UserDataKey = UserDataKey { unUserDataKey :: Text }
 
 newtype UserData = UserData { unUserData :: Text }
   deriving stock (Eq, Show)
-  -- deriving newtype (FromHttpApiData, FromJSON, ToHttpApiData, ToJSON)
   deriving newtype (MimeRender PlainTextNoUTF8)
 
 data ServersReqVolume = ServersReqVolume
@@ -372,6 +370,16 @@ type InstanceIpsPostApi =
   ReqBody '[JSON] IpsReq :>
   PostCreated '[JSON] IpsResp
 
+type InstanceIpsDeleteApi =
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "ips" :>
+  Capture "ip_id" IpId :>
+  DeleteNoContent
+
 type InstanceServersPostApi =
   AuthProtect "auth-token" :>
   "instance" :>
@@ -463,6 +471,7 @@ type InstanceImagesGetApi =
 
 type ScalewayApi =
   InstanceIpsPostApi :<|>
+  InstanceIpsDeleteApi :<|>
   InstanceServersPostApi :<|>
   InstanceServersGetApi :<|>
   InstanceServersActionPostApi :<|>
@@ -480,6 +489,12 @@ ipsPostApi ::
   Zone ->
   IpsReq ->
   ClientM IpsResp
+
+ipsDeleteApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  IpId ->
+  ClientM NoContent
 
 serversPostApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
@@ -536,6 +551,7 @@ imagesGetApi ::
   ClientM (Headers '[Header "x-total-count" Int] ImagesResp)
 
 ipsPostApi
+  :<|> ipsDeleteApi
   :<|> serversPostApi
   :<|> serversGetApi
   :<|> serversActionPostApi

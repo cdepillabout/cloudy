@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Cloudy.Db where
 
@@ -154,8 +155,8 @@ instance ToRow ScalewayInstance where
     toRow (cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress)
 
 data InstanceInfo
-  = CloudyScalewayInstance (CloudyInstance, ScalewayInstance)
-  | CloudyAwsInstance (CloudyInstance, Void {- TODO: actually implement AWS stuff -})
+  = CloudyScalewayInstance CloudyInstance ScalewayInstance
+  | CloudyAwsInstance CloudyInstance Void {- TODO: actually implement AWS stuff -}
   deriving stock Show
 
 newCloudyInstance :: Connection -> IO (CloudyInstanceId, Text)
@@ -240,6 +241,16 @@ newScalewayInstance conn creationTime cloudyInstanceId scalewayZone scalewayInst
       \VALUES (?, ?, ?, ?, ?)"
       ScalewayInstance { cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
 
+findScalewayInstanceByCloudyInstanceId :: Connection -> CloudyInstanceId -> IO (Maybe ScalewayInstance)
+findScalewayInstanceByCloudyInstanceId conn cloudyInstanceId =
+  listToMaybe <$>
+    query
+      conn
+      "SELECT cloudy_instance_id, scaleway_zone, scaleway_instance_id, scaleway_ip_id, scaleway_ip_address \
+      \FROM scaleway_instance \
+      \WHERE cloudy_instance_id == ?"
+      (Only cloudyInstanceId)
+
 -- | Return a single CloudyInstanceId if there is exactly one in the database that
 -- is not already deleted.
 findOnlyOneInstanceId :: Connection -> IO (OnlyOne CloudyInstanceId)
@@ -255,9 +266,19 @@ findOnlyOneInstanceId conn = do
 utcTimeToSqliteInt :: UTCTime -> Int64
 utcTimeToSqliteInt = round . utcTimeToPOSIXSeconds
 
+instanceInfoForId :: Connection -> CloudyInstanceId -> IO (Maybe InstanceInfo)
+instanceInfoForId conn cloudyInstanceId = withTransaction conn $ do
+  maybeCloudyInstance <- findCloudyInstanceById conn cloudyInstanceId
+  case maybeCloudyInstance of
+    Nothing -> pure Nothing
+    Just cloudyInstance -> do
+      maybeCloudyInstanceId <- findScalewayInstanceByCloudyInstanceId conn cloudyInstance.id
+      pure $ fmap (CloudyScalewayInstance cloudyInstance) maybeCloudyInstanceId
+
 data DbInvariantErr
   = CloudyInstanceHasNoProviderInstance CloudyInstanceId
   | CloudyInstanceHasMultipleProviderInstances CloudyInstanceId
+  | CloudyInstanceHasNullCreatedAt CloudyInstanceId
   deriving stock Show
 
 assertDbInvariants :: Connection -> IO ()
@@ -267,8 +288,11 @@ assertDbInvariants conn = withTransaction conn $ do
       [ invariantEveryCloudyInstHasExactlyOneProviderInst conn
       , invariantCloudyInstCorectDates conn
       ]
-  error $
-    "assertDbInvariants: DB invariants have been violated: " <> show invariantErrors
+  case invariantErrors of
+    [] -> pure ()
+    _ ->
+      error $
+        "assertDbInvariants: DB invariants have been violated: " <> show invariantErrors
 
 -- | There needs to be EXACTLY ONE corresponding cloud provider instance for each
 -- cloudy instance.
@@ -293,10 +317,15 @@ invariantEveryCloudyInstHasExactlyOneProviderInst conn = do
       Nothing -> pure $ Just $ CloudyInstanceHasNoProviderInstance cloudyInstId
 
 -- | Cloudy instances should always have a @created_at@ value that is non-null.
+--
+-- The only time a Cloudy instance can have a @created_at@ value that is null
+-- is within the Create CLI command.  Although this invariant should hold both
+-- before and after the Create CLI command.
 invariantCloudyInstCorectDates :: Connection -> IO [DbInvariantErr]
 invariantCloudyInstCorectDates conn = do
-  undefined
-
-instanceInfoForId :: Connection -> CloudyInstanceId -> IO (Maybe InstanceInfo)
-instanceInfoForId conn cloudyInstanceId = do
-  undefined
+  instIds <-
+    fmap fromOnly <$>
+      query_
+        conn
+        "SELECT id WHERE cloudy_instance WHERE created_at is NULL"
+  pure $ fmap CloudyInstanceHasNullCreatedAt instIds

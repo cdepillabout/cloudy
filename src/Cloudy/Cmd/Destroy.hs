@@ -4,70 +4,69 @@ module Cloudy.Cmd.Destroy where
 
 import Cloudy.Cli (DestroyCliOpts (..))
 import Cloudy.LocalConfFile (LocalConfFileOpts)
-import Cloudy.Db (CloudyInstanceId, withCloudyDb, findOnlyOneInstanceId, OnlyOne (..), findCloudyInstanceIdByName)
+import Cloudy.Db (CloudyInstanceId, withCloudyDb, findOnlyOneInstanceId, OnlyOne (..), findCloudyInstanceIdByName, InstanceInfo (..), instanceInfoForId, ScalewayInstance (..))
 import Data.Text (Text, unpack)
 import Database.SQLite.Simple (Connection)
+import Data.Void (absurd)
+import Data.Maybe (fromMaybe)
+import Servant.Client (ClientM)
+import Servant.API (NoContent(..))
+import Cloudy.Cmd.Scaleway.Utils (runScalewayClientM, createAuthReq)
+import Cloudy.Scaleway (ipsDeleteApi)
+import qualified Cloudy.Scaleway as Scaleway
 
-data DestroyBy = DestroyByName Text | DestroyByInstanceId CloudyInstanceId | DestroyOnlyOne
+data SelectInstBy = SelectInstByName Text | SelectInstById CloudyInstanceId | SelectInstOnlyOne
   deriving stock Show
 
 data DestroySettings = DestroySettings
-  { destroyBy :: DestroyBy
+  { selectInstBy :: SelectInstBy
   }
   deriving stock Show
 
 mkSettings :: LocalConfFileOpts -> DestroyCliOpts -> IO DestroySettings
 mkSettings _localConfFileOpts cliOpts = do
-  let destroyBy =
+  let selectInstBy =
         case (cliOpts.id, cliOpts.name) of
-          (Just cloudyInstanceId, Nothing) -> DestroyByInstanceId cloudyInstanceId
-          (Nothing, Just cloudyInstanceName) -> DestroyByName cloudyInstanceName
-          (Nothing, Nothing) -> DestroyOnlyOne
+          (Just cloudyInstanceId, Nothing) -> SelectInstById cloudyInstanceId
+          (Nothing, Just cloudyInstanceName) -> SelectInstByName cloudyInstanceName
+          (Nothing, Nothing) -> SelectInstOnlyOne
           (_, _) -> error "Both cloudy instance id and cloudy instance name were specified.  You can only specify at most one of these."
-  pure DestroySettings { destroyBy }
+  pure DestroySettings { selectInstBy }
 
 runDestroy :: LocalConfFileOpts -> DestroyCliOpts -> IO ()
 runDestroy localConfFileOpts scalewayOpts = do
   settings <- mkSettings localConfFileOpts scalewayOpts
   print settings
   withCloudyDb $ \conn -> do
-    instanceInfo <- findInstanceInfoForDestroyBy conn settings.destroyBy
-    undefined
+    maybeInstanceInfo <- findInstanceInfoForSelectInstBy conn settings.selectInstBy
+    instanceInfo <-
+      maybe
+        (error $ "Couldn't find instance info for selection: " <> show settings.selectInstBy)
+        pure
+        maybeInstanceInfo
+    case instanceInfo of
+      CloudyAwsInstance _cloudyInstance void -> absurd void
+      CloudyScalewayInstance cloudyInstance scalewayInstance -> do
+        runScalewayClientM
+          (\err -> error $ "ERROR! Problem deleting instance: " <> show err)
+          (destroyScalewayServer settings scalewayInstance)
 
-    -- (cloudyInstanceId, instanceName) <- newCloudyInstance conn
-    -- currentTime <- getCurrentTime
-    -- (scalewayServerId, scalewayIpId, scalewayIpAddr) <- runScalewayClientM
-    --   (\err -> error $ "ERROR! Problem creating instance: " <> show err)
-    --   (createScalewayServer settings instanceName)
-    -- newScalewayInstance
-    --   conn
-    --   currentTime
-    --   cloudyInstanceId
-    --   (unServerId scalewayServerId)
-    --   (unIpId scalewayIpId)
-    --   scalewayIpAddr
-    -- putStrLn "Waiting for Scaleway instance to become available..."
-    -- runScalewayClientM
-    --   (\err -> error $ "ERROR! Problem waiting for instance to be ready: " <> show err)
-    --   (waitForScalewayServer settings scalewayServerId)
-    -- putStrLn "Scaleway instance now available."
+findInstanceInfoForSelectInstBy :: Connection -> SelectInstBy -> IO (Maybe InstanceInfo)
+findInstanceInfoForSelectInstBy conn selectInstBy = do
+  cloudyInstanceId <- cloudyInstanceIdForSelectInstBy conn selectInstBy
+  instanceInfoForId conn cloudyInstanceId
 
-findInstanceInfoForDestroyBy :: Connection -> DestroyBy -> IO a0
-findInstanceInfoForDestroyBy conn destroyBy = do
-  cloudyInstanceId <- cloudyInstanceIdForDestroyBy conn destroyBy
-  instanceInfoForId cloudyInstanceId
-
-cloudyInstanceIdForDestroyBy :: Connection -> DestroyBy -> IO CloudyInstanceId
-cloudyInstanceIdForDestroyBy conn = \case
-  DestroyByName instName -> do
+cloudyInstanceIdForSelectInstBy :: Connection -> SelectInstBy -> IO CloudyInstanceId
+cloudyInstanceIdForSelectInstBy conn = \case
+  SelectInstByName instName -> do
     maybeCloudyInstId <- findCloudyInstanceIdByName conn instName
     case maybeCloudyInstId of
       Nothing ->
         error . unpack $
           "No cloudy instances found with name \"" <> instName <> "\""
       Just cloudyInstId -> pure cloudyInstId
-  DestroyByInstanceId cloudyInstanceId -> pure cloudyInstanceId
-  DestroyOnlyOne -> do
+  SelectInstById cloudyInstanceId -> pure cloudyInstanceId
+  SelectInstOnlyOne -> do
     onlyOneInstId <- findOnlyOneInstanceId conn
     case onlyOneInstId of
       OnlyOne instId -> pure instId
@@ -78,3 +77,13 @@ cloudyInstanceIdForDestroyBy conn = \case
       NoneExist ->
         error "No cloudy instances exist in the database"
 
+destroyScalewayServer :: DestroySettings -> ScalewayInstance -> ClientM ()
+destroyScalewayServer settings scalewayInstance = do
+  let authReq = createAuthReq settings.secretKey
+      ipId = Scaleway.IpId scalewayInstance.scalewayIpId
+  zone <-
+    fromMaybeM
+      _
+      (zoneFromText scalewayInstance.scalewayZone)
+  NoContent <- ipsDeleteApi authReq ipId zone
+  pure ()

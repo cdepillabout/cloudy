@@ -57,6 +57,7 @@ library
                      , containers
                      , directory
                      , filepath
+                     , from-sum
                      , http-api-data
                      , http-client-tls
                      , http-media
