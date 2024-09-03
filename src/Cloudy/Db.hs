@@ -16,7 +16,6 @@ import Database.SQLite.Simple.ToField (ToField)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Void (Void)
 import Data.Traversable (for)
-import Control.Applicative (asum)
 import Data.Foldable (fold)
 
 createLocalDatabase :: Connection -> IO ()
@@ -237,7 +236,7 @@ newScalewayInstance conn creationTime cloudyInstanceId scalewayZone scalewayInst
     execute
       conn
       "INSERT INTO scaleway_instance \
-      \(cloudy_instance_id, scaleway_zone scaleway_instance_id, scaleway_ip_id, scaleway_ip_address) \
+      \(cloudy_instance_id, scaleway_zone, scaleway_instance_id, scaleway_ip_id, scaleway_ip_address) \
       \VALUES (?, ?, ?, ?, ?)"
       ScalewayInstance { cloudyInstanceId, scalewayZone, scalewayInstanceId, scalewayIpId, scalewayIpAddress }
 
@@ -327,5 +326,5 @@ invariantCloudyInstCorectDates conn = do
     fmap fromOnly <$>
       query_
         conn
-        "SELECT id WHERE cloudy_instance WHERE created_at is NULL"
+        "SELECT id FROM cloudy_instance WHERE created_at is NULL"
   pure $ fmap CloudyInstanceHasNullCreatedAt instIds

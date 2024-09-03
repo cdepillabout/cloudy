@@ -3,23 +3,28 @@
 module Cloudy.Cmd.Destroy where
 
 import Cloudy.Cli (DestroyCliOpts (..))
-import Cloudy.LocalConfFile (LocalConfFileOpts)
+import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Db (CloudyInstanceId, withCloudyDb, findOnlyOneInstanceId, OnlyOne (..), findCloudyInstanceIdByName, InstanceInfo (..), instanceInfoForId, ScalewayInstance (..))
 import Data.Text (Text, unpack)
 import Database.SQLite.Simple (Connection)
 import Data.Void (absurd)
-import Data.Maybe (fromMaybe)
 import Servant.Client (ClientM)
 import Servant.API (NoContent(..))
 import Cloudy.Cmd.Scaleway.Utils (runScalewayClientM, createAuthReq)
-import Cloudy.Scaleway (ipsDeleteApi)
+import Cloudy.Scaleway (ipsDeleteApi, zoneFromText)
 import qualified Cloudy.Scaleway as Scaleway
+import Control.FromSum (fromMaybeM)
 
 data SelectInstBy = SelectInstByName Text | SelectInstById CloudyInstanceId | SelectInstOnlyOne
   deriving stock Show
 
 data DestroySettings = DestroySettings
   { selectInstBy :: SelectInstBy
+  }
+  deriving stock Show
+
+data ScalewayDestroySettings = ScalewayDestroySettings
+  { secretKey :: Text
   }
   deriving stock Show
 
@@ -32,6 +37,15 @@ mkSettings _localConfFileOpts cliOpts = do
           (Nothing, Nothing) -> SelectInstOnlyOne
           (_, _) -> error "Both cloudy instance id and cloudy instance name were specified.  You can only specify at most one of these."
   pure DestroySettings { selectInstBy }
+
+mkScalewaySettings :: LocalConfFileOpts -> IO ScalewayDestroySettings
+mkScalewaySettings localConfFileOpts = do
+  let maybeSecretKey = localConfFileOpts.scaleway >>= \scale -> scale.secretKey :: Maybe Text
+  secretKey <- getVal maybeSecretKey "Could not find scaleway.secret_key in config file"
+  pure ScalewayDestroySettings { secretKey }
+  where
+    getVal :: Maybe a -> String -> IO a
+    getVal mayVal errMsg = maybe (error errMsg) pure mayVal
 
 runDestroy :: LocalConfFileOpts -> DestroyCliOpts -> IO ()
 runDestroy localConfFileOpts scalewayOpts = do
@@ -47,9 +61,10 @@ runDestroy localConfFileOpts scalewayOpts = do
     case instanceInfo of
       CloudyAwsInstance _cloudyInstance void -> absurd void
       CloudyScalewayInstance cloudyInstance scalewayInstance -> do
+        scalewaySettings <- mkScalewaySettings localConfFileOpts
         runScalewayClientM
           (\err -> error $ "ERROR! Problem deleting instance: " <> show err)
-          (destroyScalewayServer settings scalewayInstance)
+          (destroyScalewayServer settings scalewaySettings scalewayInstance)
 
 findInstanceInfoForSelectInstBy :: Connection -> SelectInstBy -> IO (Maybe InstanceInfo)
 findInstanceInfoForSelectInstBy conn selectInstBy = do
@@ -77,13 +92,20 @@ cloudyInstanceIdForSelectInstBy conn = \case
       NoneExist ->
         error "No cloudy instances exist in the database"
 
-destroyScalewayServer :: DestroySettings -> ScalewayInstance -> ClientM ()
-destroyScalewayServer settings scalewayInstance = do
-  let authReq = createAuthReq settings.secretKey
+destroyScalewayServer ::
+  DestroySettings ->
+  ScalewayDestroySettings ->
+  ScalewayInstance ->
+  ClientM ()
+destroyScalewayServer _settings scalewaySettings scalewayInstance = do
+  let authReq = createAuthReq scalewaySettings.secretKey
       ipId = Scaleway.IpId scalewayInstance.scalewayIpId
+      zoneErrMsg =
+        "destroyScalewayServer: Could not figure out Scaleway zone from string: " <>
+        scalewayInstance.scalewayZone
   zone <-
     fromMaybeM
-      _
+      (error $ unpack zoneErrMsg)
       (zoneFromText scalewayInstance.scalewayZone)
-  NoContent <- ipsDeleteApi authReq ipId zone
+  NoContent <- ipsDeleteApi authReq zone ipId
   pure ()
