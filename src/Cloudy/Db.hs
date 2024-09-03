@@ -13,7 +13,7 @@ import Data.Time (UTCTime)
 import Database.SQLite.Simple (withConnection, Connection, execute_, Query, query_, FromRow (..), ToRow (..), execute, withTransaction, lastInsertRowId, query, Only (..), field)
 import Database.SQLite.Simple.FromField (FromField)
 import Database.SQLite.Simple.ToField (ToField)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
 import Data.Void (Void)
 import Data.Traversable (for)
 import Data.Foldable (fold)
@@ -127,8 +127,8 @@ instance FromRow CloudyInstance where
   fromRow = do
     id' <- field
     name <- field
-    createdAt <- field
-    deletedAt <- field
+    createdAt <- fmap utcTimeFromSqliteInt <$> field
+    deletedAt <- fmap utcTimeFromSqliteInt <$> field
     pure $ CloudyInstance { id = id', name, createdAt, deletedAt }
 
 data ScalewayInstance = ScalewayInstance
@@ -204,13 +204,16 @@ findCloudyInstanceIdByName conn cloudyInstanceName = do
 
 findCloudyInstanceById :: Connection -> CloudyInstanceId -> IO (Maybe CloudyInstance)
 findCloudyInstanceById conn cloudyInstanceId = do
-  listToMaybe <$>
+  putStrLn $ "whooooooo: " <> show cloudyInstanceId
+  x <- listToMaybe <$>
     query
       conn
       "SELECT id, name, created_at, deleted_at \
       \FROM cloudy_instance \
       \WHERE id == ? AND deleted_at IS NULL AND created_at IS NOT NULL"
       (Only cloudyInstanceId)
+  putStrLn $ "whooooooo after: " <> show x
+  pure x
 
 newScalewayInstance ::
   Connection ->
@@ -259,11 +262,14 @@ findOnlyOneInstanceId conn = do
       conn
       "SELECT id \
       \FROM cloudy_instance \
-      \WHERE deleted_at IS NOT NULL"
+      \WHERE deleted_at IS NULL"
   pure $ fmap fromOnly onlyOneInstId
 
 utcTimeToSqliteInt :: UTCTime -> Int64
 utcTimeToSqliteInt = round . utcTimeToPOSIXSeconds
+
+utcTimeFromSqliteInt :: Int64 -> UTCTime
+utcTimeFromSqliteInt = posixSecondsToUTCTime . fromIntegral
 
 instanceInfoForId :: Connection -> CloudyInstanceId -> IO (Maybe InstanceInfo)
 instanceInfoForId conn cloudyInstanceId = withTransaction conn $ do
