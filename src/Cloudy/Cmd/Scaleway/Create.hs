@@ -9,11 +9,14 @@ import Cloudy.Db (newCloudyInstance, newScalewayInstance, withCloudyDb)
 import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi, IpId, unIpId, zoneToText)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map.Strict as Map
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
 import Data.Time (getCurrentTime)
 import Servant.Client (ClientM)
 import Servant.API (NoContent(NoContent))
 import Control.Monad (when)
+import Network.Socket (AddrInfo(..), SocketType (Stream), defaultHints, getAddrInfo, openSocket, gracefulClose, connect)
+import Control.Exception (bracket, SomeException, try)
+import Control.Concurrent (threadDelay)
 
 data ScalewayCreateSettings = ScalewayCreateSettings
   { secretKey :: Text
@@ -71,6 +74,10 @@ runCreate localConfFileOpts scalewayOpts = do
       (\err -> error $ "ERROR! Problem waiting for instance to be ready: " <> show err)
       (waitForScalewayServer settings scalewayServerId)
     putStrLn "Scaleway instance now available."
+    putStrLn "Waiting for SSH to be ready on the instance..."
+    waitForSshPort scalewayIpAddr
+    putStrLn "SSH now available on the instance."
+
 
 createScalewayServer :: ScalewayCreateSettings -> Text -> ClientM (ServerId, IpId, Text)
 createScalewayServer settings instanceName = do
@@ -127,12 +134,31 @@ createScalewayServer settings instanceName = do
   liftIO $ print task
   pure (serversResp.id, ipsResp.id, ipsResp.address)
 
+oneGb :: Int
+oneGb = 1000 * 1000 * 1000
+
 waitForScalewayServer :: ScalewayCreateSettings -> ServerId -> ClientM ()
 waitForScalewayServer settings serverId = do
   let authReq = createAuthReq settings.secretKey
   serversResp <- serversGetApi authReq settings.zone serverId
   when (serversResp.state /= "running") $ waitForScalewayServer settings serverId
 
-
-oneGb :: Int
-oneGb = 1000 * 1000 * 1000
+-- | Wait for port 22 to be available on the remote machine.
+waitForSshPort :: Text -> IO ()
+waitForSshPort ipaddrText = do
+  let hints = defaultHints { addrSocketType = Stream }
+  addrInfos <- getAddrInfo (Just hints) (Just $ unpack ipaddrText) (Just "22")
+  case addrInfos of
+    [] -> error "Couldn't get addr info for instance"
+    addrInfo : _ -> tryConnect addrInfo
+  where
+    tryConnect :: AddrInfo -> IO ()
+    tryConnect addrInfo = do
+      res <-
+        try $ bracket (openSocket addrInfo) (`gracefulClose` 1000) $ \sock ->
+          connect sock $ addrAddress addrInfo
+      case res of
+        Left (_ :: SomeException) -> do
+          threadDelay 1_000_000
+          tryConnect addrInfo
+        Right _ -> pure ()

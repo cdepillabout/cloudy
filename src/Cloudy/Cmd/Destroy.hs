@@ -4,16 +4,17 @@ module Cloudy.Cmd.Destroy where
 
 import Cloudy.Cli (DestroyCliOpts (..))
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
-import Cloudy.Db (CloudyInstanceId, withCloudyDb, findOnlyOneInstanceId, OnlyOne (..), findCloudyInstanceIdByName, InstanceInfo (..), instanceInfoForId, ScalewayInstance (..))
+import Cloudy.Db (CloudyInstance (..), CloudyInstanceId, withCloudyDb, findOnlyOneInstanceId, OnlyOne (..), findCloudyInstanceIdByName, InstanceInfo (..), instanceInfoForId, ScalewayInstance (..), setCloudyInstanceDeleted, cloudyInstanceFromInstanceInfo)
 import Data.Text (Text, unpack)
 import Database.SQLite.Simple (Connection)
 import Data.Void (absurd)
 import Servant.Client (ClientM)
 import Servant.API (NoContent(..))
 import Cloudy.Cmd.Scaleway.Utils (runScalewayClientM, createAuthReq)
-import Cloudy.Scaleway (ipsDeleteApi, zoneFromText)
+import Cloudy.Scaleway (ipsDeleteApi, zoneFromText, ServersActionReq (..), serversActionPostApi)
 import qualified Cloudy.Scaleway as Scaleway
 import Control.FromSum (fromMaybeM)
+import Control.Monad.IO.Class (liftIO)
 
 data SelectInstBy = SelectInstByName Text | SelectInstById CloudyInstanceId | SelectInstOnlyOne
   deriving stock Show
@@ -60,11 +61,13 @@ runDestroy localConfFileOpts scalewayOpts = do
         maybeInstanceInfo
     case instanceInfo of
       CloudyAwsInstance _cloudyInstance void -> absurd void
-      CloudyScalewayInstance cloudyInstance scalewayInstance -> do
+      CloudyScalewayInstance _cloudyInstance scalewayInstance -> do
         scalewaySettings <- mkScalewaySettings localConfFileOpts
         runScalewayClientM
           (\err -> error $ "ERROR! Problem deleting instance: " <> show err)
           (destroyScalewayServer settings scalewaySettings scalewayInstance)
+    let cloudyInstanceId = (cloudyInstanceFromInstanceInfo instanceInfo).id
+    setCloudyInstanceDeleted conn cloudyInstanceId
 
 findInstanceInfoForSelectInstBy :: Connection -> SelectInstBy -> IO (Maybe InstanceInfo)
 findInstanceInfoForSelectInstBy conn selectInstBy = do
@@ -108,4 +111,8 @@ destroyScalewayServer _settings scalewaySettings scalewayInstance = do
       (error $ unpack zoneErrMsg)
       (zoneFromText scalewayInstance.scalewayZone)
   NoContent <- ipsDeleteApi authReq zone ipId
-  pure ()
+  liftIO . putStrLn . unpack $ "Successfully deleted Scaleway IP: " <> scalewayInstance.scalewayIpAddress
+  let act = ServersActionReq { action = "terminate" }
+      scalewayInstId = Scaleway.ServerId scalewayInstance.scalewayInstanceId
+  _task <- serversActionPostApi authReq zone scalewayInstId act
+  liftIO . putStrLn . unpack $ "Successfully deleted Scaleway server: " <> scalewayInstance.scalewayInstanceId

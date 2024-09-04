@@ -61,6 +61,7 @@ library
                      , http-api-data
                      , http-client-tls
                      , http-media
+                     , network
                      , network-bsd
                      , optparse-applicative
                      , pretty-simple

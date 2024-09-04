@@ -17,6 +17,7 @@ import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
 import Data.Void (Void)
 import Data.Traversable (for)
 import Data.Foldable (fold)
+import Data.Time (getCurrentTime)
 
 createLocalDatabase :: Connection -> IO ()
 createLocalDatabase conn = do
@@ -158,6 +159,11 @@ data InstanceInfo
   | CloudyAwsInstance CloudyInstance Void {- TODO: actually implement AWS stuff -}
   deriving stock Show
 
+cloudyInstanceFromInstanceInfo :: InstanceInfo -> CloudyInstance
+cloudyInstanceFromInstanceInfo = \case
+  CloudyScalewayInstance cloudyInstance _ -> cloudyInstance
+  CloudyAwsInstance cloudyInstance _ -> cloudyInstance
+
 newCloudyInstance :: Connection -> IO (CloudyInstanceId, Text)
 newCloudyInstance conn = withTransaction conn go
   where
@@ -204,16 +210,23 @@ findCloudyInstanceIdByName conn cloudyInstanceName = do
 
 findCloudyInstanceById :: Connection -> CloudyInstanceId -> IO (Maybe CloudyInstance)
 findCloudyInstanceById conn cloudyInstanceId = do
-  putStrLn $ "whooooooo: " <> show cloudyInstanceId
-  x <- listToMaybe <$>
+  listToMaybe <$>
     query
       conn
       "SELECT id, name, created_at, deleted_at \
       \FROM cloudy_instance \
       \WHERE id == ? AND deleted_at IS NULL AND created_at IS NOT NULL"
       (Only cloudyInstanceId)
-  putStrLn $ "whooooooo after: " <> show x
-  pure x
+
+setCloudyInstanceDeleted :: Connection -> CloudyInstanceId -> IO ()
+setCloudyInstanceDeleted conn cloudyInstanceId = do
+    currTime <- getCurrentTime
+    execute
+      conn
+      "UPDATE cloudy_instance \
+      \SET deleted_at = ? \
+      \WHERE id = ?"
+      (utcTimeToSqliteInt currTime, cloudyInstanceId)
 
 newScalewayInstance ::
   Connection ->
@@ -292,6 +305,8 @@ assertDbInvariants conn = withTransaction conn $ do
     fold
       [ invariantEveryCloudyInstHasExactlyOneProviderInst conn
       , invariantCloudyInstCorectDates conn
+      -- TODO: add invariant that says two non-deleted scaleway servers should
+      -- never have the same IP addresses
       ]
   case invariantErrors of
     [] -> pure ()
