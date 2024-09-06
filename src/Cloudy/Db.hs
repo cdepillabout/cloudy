@@ -6,18 +6,18 @@ module Cloudy.Db where
 import Cloudy.NameGen (instanceNameGen)
 import Cloudy.Path (getCloudyDbPath)
 import Control.Exception (Exception, throwIO)
+import Data.Foldable (fold)
 import Data.Int (Int64)
+import Data.List (find)
 import Data.Maybe (listToMaybe, catMaybes)
 import Data.Text (Text)
-import Data.Time (UTCTime)
+import Data.Time ( UTCTime, getCurrentTime )
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
+import Data.Traversable (for)
+import Data.Void (Void)
 import Database.SQLite.Simple (withConnection, Connection, execute_, Query, query_, FromRow (..), ToRow (..), execute, withTransaction, lastInsertRowId, query, Only (..), field)
 import Database.SQLite.Simple.FromField (FromField)
 import Database.SQLite.Simple.ToField (ToField)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
-import Data.Void (Void)
-import Data.Traversable (for)
-import Data.Foldable (fold)
-import Data.Time (getCurrentTime)
 
 createLocalDatabase :: Connection -> IO ()
 createLocalDatabase conn = do
@@ -36,13 +36,13 @@ createLocalDatabase conn = do
     \  ( cloudy_instance_id INTEGER NOT NULL UNIQUE \
     \  , scaleway_zone TEXT NOT NULL \
     \  , scaleway_instance_id TEXT NOT NULL UNIQUE \
-    \  , scaleway_ip_id TEXT NOT NULL UNIQUE \
+    \  , scaleway_ip_id TEXT NOT NULL \
     \  , scaleway_ip_address TEXT NOT NULL \
     \  , FOREIGN KEY (cloudy_instance_id) REFERENCES cloudy_instance(id) \
     \  ) \
     \STRICT"
 
-withCloudyDb :: (Connection -> IO ()) -> IO ()
+withCloudyDb :: (Connection -> IO a) -> IO a
 withCloudyDb action = do
   dcutDbPath <- getCloudyDbPath
   withSqliteConn dcutDbPath $ \conn -> do
@@ -50,10 +50,11 @@ withCloudyDb action = do
     -- TODO: Maybe create some sort of production build that doesn't check
     -- the invariants.
     assertDbInvariants conn
-    action conn
+    res <- action conn
     assertDbInvariants conn
+    pure res
 
-withSqliteConn :: FilePath -> (Connection -> IO ()) -> IO ()
+withSqliteConn :: FilePath -> (Connection -> IO a) -> IO a
 withSqliteConn dbPath action =
   withConnection
       dbPath
@@ -113,7 +114,7 @@ queryUnique conn q a = do
     _:_ -> error "queryUnique: expecting only a single result at most, but got multiple results.  Is there really a UNIQUE constraint here?"
 
 newtype CloudyInstanceId = CloudyInstanceId { unCloudyInstanceId :: Int64 }
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Ord, Show)
   deriving newtype (FromField, ToField)
 
 data CloudyInstance = CloudyInstance
@@ -218,6 +219,14 @@ findCloudyInstanceById conn cloudyInstanceId = do
       \WHERE id == ? AND deleted_at IS NULL AND created_at IS NOT NULL"
       (Only cloudyInstanceId)
 
+findAllCloudyInstances :: Connection -> IO [CloudyInstance]
+findAllCloudyInstances conn =
+  query_
+    conn
+    "SELECT id, name, created_at, deleted_at \
+    \FROM cloudy_instance \
+    \WHERE deleted_at IS NULL AND created_at IS NOT NULL"
+
 setCloudyInstanceDeleted :: Connection -> CloudyInstanceId -> IO ()
 setCloudyInstanceDeleted conn cloudyInstanceId = do
     currTime <- getCurrentTime
@@ -266,6 +275,21 @@ findScalewayInstanceByCloudyInstanceId conn cloudyInstanceId =
       \WHERE cloudy_instance_id == ?"
       (Only cloudyInstanceId)
 
+findAllScalewayInstances :: Connection -> IO [ScalewayInstance]
+findAllScalewayInstances conn =
+  query_
+    conn
+    "SELECT \
+    \  scaleway_instance.cloudy_instance_id, \
+    \  scaleway_instance.scaleway_zone, \
+    \  scaleway_instance.scaleway_instance_id, \
+    \  scaleway_instance.scaleway_ip_id, \
+    \  scaleway_instance.scaleway_ip_address \
+    \FROM scaleway_instance \
+    \INNER JOIN cloudy_instance ON scaleway_instance.cloudy_instance_id == cloudy_instance.id \
+    \WHERE cloudy_instance.deleted_at IS NULL AND cloudy_instance.created_at IS NOT NULL"
+
+
 -- | Return a single CloudyInstanceId if there is exactly one in the database that
 -- is not already deleted.
 findOnlyOneInstanceId :: Connection -> IO (OnlyOne CloudyInstanceId)
@@ -292,6 +316,22 @@ instanceInfoForId conn cloudyInstanceId = withTransaction conn $ do
     Just cloudyInstance -> do
       maybeCloudyInstanceId <- findScalewayInstanceByCloudyInstanceId conn cloudyInstance.id
       pure $ fmap (CloudyScalewayInstance cloudyInstance) maybeCloudyInstanceId
+
+findAllInstanceInfos :: Connection -> IO [InstanceInfo]
+findAllInstanceInfos conn = withTransaction conn $ do
+  cloudyInstances <- findAllCloudyInstances conn
+  scalewayInstances <- findAllScalewayInstances conn
+  for cloudyInstances $ \cloudyInstance -> do
+    let maybeScalewayInstance =
+          find
+            (\scalewayInst -> scalewayInst.cloudyInstanceId == cloudyInstance.id)
+            scalewayInstances
+    case maybeScalewayInstance of
+      Nothing ->
+        error $ "Could not find scaleway instance for cloudyInstance: " <> show cloudyInstance
+      Just scalewayInstance ->
+        pure $ CloudyScalewayInstance cloudyInstance scalewayInstance
+
 
 data DbInvariantErr
   = CloudyInstanceHasNoProviderInstance CloudyInstanceId
