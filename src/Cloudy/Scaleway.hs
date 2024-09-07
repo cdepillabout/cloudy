@@ -7,7 +7,7 @@ import Data.Aeson (ToJSON(..), object, (.=), FromJSON (..), withObject, Value, (
 import Data.Map.Strict (Map)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
-import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType), PostAccepted, Patch, DeleteNoContent)
+import Servant.API ((:>), Capture, ReqBody, JSON, AuthProtect, (:<|>) ((:<|>)), PostCreated, Get, QueryParam, Headers, Header, PlainText, NoContent, MimeRender (mimeRender), PatchNoContent, Accept (contentType), PostAccepted, Patch, DeleteNoContent, MimeUnrender (..))
 import Servant.Client (client, ClientM)
 import Servant.Client.Core (AuthenticatedRequest)
 import Web.HttpApiData (ToHttpApiData (..), FromHttpApiData)
@@ -23,6 +23,9 @@ instance Accept PlainTextNoUTF8 where
 
 instance MimeRender PlainTextNoUTF8 Text where
   mimeRender _ = mimeRender (Proxy @PlainText)
+
+instance MimeUnrender PlainTextNoUTF8 Text where
+  mimeUnrender _ = mimeUnrender (Proxy @PlainText)
 
 newtype PerPage = PerPage { unPerPage :: Int }
   deriving stock Show
@@ -93,7 +96,7 @@ newtype UserDataKey = UserDataKey { unUserDataKey :: Text }
 
 newtype UserData = UserData { unUserData :: Text }
   deriving stock (Eq, Show)
-  deriving newtype (MimeRender PlainTextNoUTF8)
+  deriving newtype (MimeRender PlainTextNoUTF8, MimeUnrender PlainTextNoUTF8)
 
 data ServersReqVolume = ServersReqVolume
   { {- name :: Text
@@ -412,6 +415,18 @@ type InstanceServersActionPostApi =
   ReqBody '[JSON] ServersActionReq :>
   PostAccepted '[JSON] TaskResp
 
+type InstanceServersUserDataGetApi =
+  AuthProtect "auth-token" :>
+  "instance" :>
+  "v1" :>
+  "zones" :>
+  Capture "zone" Zone :>
+  "servers" :>
+  Capture "server_id" ServerId :>
+  "user_data" :>
+  Capture "key" UserDataKey :>
+  Get '[PlainTextNoUTF8] UserData
+
 type InstanceServersUserDataPatchApi =
   AuthProtect "auth-token" :>
   "instance" :>
@@ -475,6 +490,7 @@ type ScalewayApi =
   InstanceServersPostApi :<|>
   InstanceServersGetApi :<|>
   InstanceServersActionPostApi :<|>
+  InstanceServersUserDataGetApi :<|>
   InstanceServersUserDataPatchApi :<|>
   InstanceVolumesPatchApi :<|>
   InstanceProductsServersGetApi :<|>
@@ -514,6 +530,13 @@ serversActionPostApi ::
   ServerId ->
   ServersActionReq ->
   ClientM TaskResp
+
+serversUserDataGetApi ::
+  AuthenticatedRequest (AuthProtect "auth-token") ->
+  Zone ->
+  ServerId ->
+  UserDataKey ->
+  ClientM UserData
 
 serversUserDataPatchApi ::
   AuthenticatedRequest (AuthProtect "auth-token") ->
@@ -555,6 +578,7 @@ ipsPostApi
   :<|> serversPostApi
   :<|> serversGetApi
   :<|> serversActionPostApi
+  :<|> serversUserDataGetApi
   :<|> serversUserDataPatchApi
   :<|> volumesPatchApi
   :<|> productsServersGetApi

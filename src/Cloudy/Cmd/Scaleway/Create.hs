@@ -6,7 +6,7 @@ import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType, getImageId)
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Db (newCloudyInstance, newScalewayInstance, withCloudyDb)
-import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi, IpId, unIpId, zoneToText)
+import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi, IpId, unIpId, zoneToText, serversUserDataGetApi)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text, pack, unpack)
@@ -77,6 +77,12 @@ runCreate localConfFileOpts scalewayOpts = do
     putStrLn "Waiting for SSH to be ready on the instance..."
     waitForSshPort scalewayIpAddr
     putStrLn "SSH now available on the instance."
+    putStrLn "Getting instance SSH key fingerprints..."
+    rawSshKeyFingerprints <- runScalewayClientM
+      (\err -> error $ "ERROR! Problem getting instance SSH key fingerprints: " <> show err)
+      (getSshKeyFingerprints settings scalewayServerId)
+    -- TODO: parse ssh key fingerprints and update ~/.ssh/known_hosts
+    undefined
 
 
 createScalewayServer :: ScalewayCreateSettings -> Text -> ClientM (ServerId, IpId, Text)
@@ -162,3 +168,15 @@ waitForSshPort ipaddrText = do
           threadDelay 1_000_000
           tryConnect addrInfo
         Right _ -> pure ()
+
+getSshKeyFingerprints :: ScalewayCreateSettings -> ServerId -> ClientM Text
+getSshKeyFingerprints settings serverId = do
+  let authReq = createAuthReq settings.secretKey
+  UserData rawSshKeyFingerprints <- serversUserDataGetApi authReq settings.zone serverId (UserDataKey "ssh-host-fingerprints")
+  pure rawSshKeyFingerprints
+
+-- example ssh key fingerprints user data file:
+--
+-- 3072 SHA256:dRJ/XiNOlh9UGnnN5/a2N+EMSP+OkqyHy8WTzHlUt5U root@cloudy-complete-knife (RSA)
+-- 256 SHA256:n6fLRD4O2Me3bRXhzHyCca1vWdQ2utxuPZVsIDUm6o0 root@cloudy-complete-knife (ECDSA)
+-- 256 SHA256:PMESLB3kYYV/8YHS/5Q3wLdufjqhZ/flkQolLIth/KE root@cloudy-complete-knife (ED25519)

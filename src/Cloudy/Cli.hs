@@ -31,6 +31,9 @@ data ListCliOpts = ListCliOpts
   deriving stock Show
 
 data SshCliOpts = SshCliOpts
+  { id :: Maybe CloudyInstanceId
+  , name :: Maybe Text
+  }
   deriving stock Show
 
 data DestroyCliOpts = DestroyCliOpts
@@ -108,7 +111,10 @@ listCliOptsParser :: Parser ListCliOpts
 listCliOptsParser = pure ListCliOpts
 
 sshCliOptsParser :: Parser SshCliOpts
-sshCliOptsParser = pure SshCliOpts
+sshCliOptsParser =
+  SshCliOpts
+    <$> cloudyInstanceIdParser
+    <*> cloudyInstanceNameParser
 
 destroyCliOptsParser :: Parser DestroyCliOpts
 destroyCliOptsParser =

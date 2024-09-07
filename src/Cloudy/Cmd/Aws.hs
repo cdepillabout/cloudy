@@ -11,7 +11,7 @@ runAws localConfFileOpts = \case
   AwsListInstanceTypes awsListInstanceTypesCliOpts -> runAwsListInstanceTypes localConfFileOpts awsListInstanceTypesCliOpts
 
 runAwsCreate :: LocalConfFileOpts -> AwsCreateCliOpts -> IO ()
-runAwsCreate localConfFileOpts createCliOpts = undefined
+runAwsCreate _localConfFileOpts _createCliOpts = undefined
 
 runAwsListInstanceTypes :: LocalConfFileOpts -> AwsListInstanceTypesCliOpts -> IO ()
-runAwsListInstanceTypes localConfFileOpts listInstanceTypesCliOpts = undefined
+runAwsListInstanceTypes _localConfFileOpts _listInstanceTypesCliOpts = undefined
