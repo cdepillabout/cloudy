@@ -7,21 +7,30 @@ import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, ge
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Db (newCloudyInstance, newScalewayInstance, withCloudyDb)
 import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi, IpId, unIpId, zoneToText, serversUserDataGetApi)
+import Control.Applicative (some)
+import Control.Concurrent (threadDelay)
+import Control.Exception (bracket, SomeException, try)
+import Control.FromSum (fromEitherM)
+import Control.Monad (when, void)
 import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString as ByteString
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map.Strict as Map
+import Data.Set (isSubsetOf)
+import qualified Data.Set as Set
 import Data.Text (Text, pack, unpack)
+import Data.Text.Encoding (encodeUtf8)
 import Data.Time (getCurrentTime)
+import Data.Word (Word64)
+import Network.Socket (AddrInfo(..), SocketType (Stream), defaultHints, getAddrInfo, openSocket, gracefulClose, connect)
 import Servant.Client (ClientM)
 import Servant.API (NoContent(NoContent))
-import Control.Monad (when, void)
-import Network.Socket (AddrInfo(..), SocketType (Stream), defaultHints, getAddrInfo, openSocket, gracefulClose, connect)
-import Control.Exception (bracket, SomeException, try)
-import Control.Concurrent (threadDelay)
-import Text.Parsec (ParseError, parse, Parsec, sepBy1, newline, space, eof, sepEndBy1, digit, char, anyChar, manyTill)
-import Control.FromSum (fromEitherM)
-import Data.List.NonEmpty (NonEmpty (..))
-import Data.Word (Word64)
-import Control.Applicative (some)
+import System.Directory (getHomeDirectory, copyFile)
+import System.Exit (ExitCode(..))
+import System.FilePath ((</>), (<.>))
+import System.Process (readProcessWithExitCode)
+import Text.Parsec (ParseError, parse, Parsec, newline, space, eof, sepEndBy1, digit, char, anyChar, manyTill)
 import Text.Read (readMaybe)
 
 data ScalewayCreateSettings = ScalewayCreateSettings
@@ -83,13 +92,12 @@ runCreate localConfFileOpts scalewayOpts = do
     putStrLn "Waiting for SSH to be ready on the instance..."
     waitForSshPort scalewayIpAddr
     putStrLn "SSH now available on the instance."
-    putStrLn "Getting instance SSH key fingerprints..."
+    putStrLn "Getting instance SSH key fingerprints from Scaleway metadata API..."
     rawSshKeyFingerprintsFromScalewayApi <- runScalewayClientM
       (\err -> error $ "ERROR! Problem getting instance SSH key fingerprints: " <> show err)
       (getSshKeyFingerprints settings scalewayServerId)
-    -- TODO: parse ssh key fingerprints and update ~/.ssh/known_hosts
+    putStrLn "Got instance SSH key fingerprints."
     updateSshHostKeys rawSshKeyFingerprintsFromScalewayApi scalewayIpAddr
-
 
 createScalewayServer :: ScalewayCreateSettings -> Text -> ClientM (ServerId, IpId, Text)
 createScalewayServer settings instanceName = do
@@ -181,12 +189,6 @@ getSshKeyFingerprints settings serverId = do
   UserData rawSshKeyFingerprints <- serversUserDataGetApi authReq settings.zone serverId (UserDataKey "ssh-host-fingerprints")
   pure rawSshKeyFingerprints
 
--- example ssh key fingerprints user data file:
---
--- 3072 SHA256:dRJ/XiNOlh9UGnnN5/a2N+EMSP+OkqyHy8WTzHlUt5U root@cloudy-complete-knife (RSA)
--- 256 SHA256:n6fLRD4O2Me3bRXhzHyCca1vWdQ2utxuPZVsIDUm6o0 root@cloudy-complete-knife (ECDSA)
--- 256 SHA256:PMESLB3kYYV/8YHS/5Q3wLdufjqhZ/flkQolLIth/KE root@cloudy-complete-knife (ED25519)
-
 updateSshHostKeys ::
   Text ->
   -- | IP Address
@@ -197,11 +199,13 @@ updateSshHostKeys rawFingerprintsFromScalewayApi ipAddr = do
     fromEitherM
       (\parseErr ->
           error $
-            "Error parsing SSH host fingerprints from Scaleway metadata api: " <>
+            "Error parsing SSH host fingerprints from Scaleway metadata API: " <>
             show parseErr
       )
       (parseFingerprints "scaleway-metadata-api" rawFingerprintsFromScalewayApi)
+  putStrLn "Getting SSH host keys from instance..."
   rawHostKeys <- getSshHostKeys ipAddr
+  putStrLn "Got SSH keys host keys from instance."
   rawFingerprintsFromHost <- fingerprintsFromHostKeys rawHostKeys
   fingerprintsFromHost <-
     fromEitherM
@@ -211,17 +215,24 @@ updateSshHostKeys rawFingerprintsFromScalewayApi ipAddr = do
             show parseErr
       )
       (parseFingerprints "host" rawFingerprintsFromScalewayApi)
-  if doFingerprintsMatch fingerprintsFromScalewayApi fingerprintsFromHost
-    then do
+  case doFingerprintsMatch fingerprintsFromScalewayApi fingerprintsFromHost of
+    FingerprintsMatch -> do
+      putStrLn "Fingerprints match between Scaleway metadata API and actual instance, so removing old known hosts keys, and adding new known host keys..."
       removeOldHostKeysFromKnownHosts ipAddr
       addNewHostKeysToKnownHosts rawHostKeys
-    else do
+      putStrLn "Added known host keys for new instance."
+    FingerprintsNoMatch ->
       error $
         "ERROR: Fingerprints from scaleway metadata api, and fingerprints " <>
         "directly from host don't match.\n\nFrom metadata api:\n\n" <>
         unpack rawFingerprintsFromScalewayApi <>
         "\n\nFrom host: \n\n" <>
         unpack rawFingerprintsFromHost
+    FingerprintsMatchErr err ->
+      error $
+        "ERROR: There was an unexpected error when comparing fingerprints from " <>
+        "the scaleway metadata API, and fingerprints directly from the host: " <>
+        unpack err
 
 -- | This datatype represents a line from an SSH fingerprint file, normally as
 -- output by @ssh-keygen -l@.
@@ -240,6 +251,22 @@ data Fingerprint = Fingerprint
     -- ^ Type of key.  Example: @"RSA"@
   }
   deriving stock Show
+
+-- | Note that we don't enforce 'server' to be same between two Fingerprints.
+instance Eq Fingerprint where
+  fing1 == fing2 =
+    fing1.size == fing2.size &&
+    fing1.fingerprint == fing2.fingerprint &&
+    fing1.keyType == fing2.keyType
+
+instance Ord Fingerprint where
+  compare fing1 fing2 =
+    case compare fing1.size fing2.size of
+      EQ ->
+        case compare fing1.fingerprint fing2.fingerprint of
+          EQ -> compare fing1.keyType fing2.keyType
+          res -> res
+      res -> res
 
 type Parser = Parsec Text ()
 
@@ -298,23 +325,58 @@ getSshHostKeys ::
   -- | IP Address or hostname.  Example: @\"123.100.200.3\"@
   Text ->
   IO Text
-getSshHostKeys = undefined
+getSshHostKeys ipAddr = do
+  (exitCode, stdout, stderr) <- readProcessWithExitCode "ssh-keyscan" [unpack ipAddr] ""
+  case exitCode of
+    ExitFailure _ -> do
+      error $
+        "getSshHostKeys: error running ssh-keyscan on ip " <> unpack ipAddr <> ": " <>
+        stderr
+    ExitSuccess -> pure $ pack stdout
 
 -- | Return the fingerprints for a set of raw host keys.
 --
 -- This effectively just runs @ssh-keygen -l@ on a set of raw host keys.
 --
--- See the docs for 'Fingerprint' for what this function outputs.
+-- See the docs for 'Fingerprint' for an example of what this function outputs.
 fingerprintsFromHostKeys ::
   -- | A newline-separated file of SSH host keys.  See the output of
   -- 'getSshHostKeys' for what this should look like.
   Text ->
   IO Text
-fingerprintsFromHostKeys = undefined
+fingerprintsFromHostKeys rawHostKeys = do
+  (exitCode, stdout, stderr) <-
+    readProcessWithExitCode "ssh-keygen" ["-l", "-f", "-"] (unpack rawHostKeys)
+  case exitCode of
+    ExitFailure _ -> do
+      error $
+        "fingerprintsFromHostKeys: error running ssh-keygen on raw host keys: " <>
+        stderr
+    ExitSuccess -> pure $ pack stdout
 
--- | Return 'True' if two sets of fingerprints match.
-doFingerprintsMatch :: NonEmpty Fingerprint -> NonEmpty Fingerprint -> Bool
-doFingerprintsMatch = undefined
+-- | Results of comparing whether two sets of fingerprints match.
+data FingerprintsMatch
+  = FingerprintsMatch
+  | FingerprintsNoMatch
+  -- | There was some error when comparing the two sets of fingerprints.
+  | FingerprintsMatchErr Text
+  deriving stock Show
+
+doFingerprintsMatch :: NonEmpty Fingerprint -> NonEmpty Fingerprint -> FingerprintsMatch
+doFingerprintsMatch fings1 fings2 =
+  let fingsLen1 = length fings1
+      fingsLen2 = length fings2
+      fingsSet1 = Set.fromList $ NonEmpty.toList fings1
+      fingsSet2 = Set.fromList $ NonEmpty.toList fings2
+      fingsSetLen1 = length fingsSet1
+      fingsSetLen2 = length fingsSet2
+  in
+  if fingsLen1 /= fingsSetLen1 then FingerprintsMatchErr "first set of fingerprints is not unique" else
+  if fingsLen2 /= fingsSetLen2 then FingerprintsMatchErr "second set of fingerprints is not unique" else
+  if fingsSetLen1 /= fingsSetLen2 then FingerprintsMatchErr "two sets of fingerprints have different numbers of fingerprints" else
+  if isSubsetOf fingsSet1 fingsSet2 && isSubsetOf fingsSet2 fingsSet1
+    then FingerprintsMatch
+    else FingerprintsNoMatch
 
 -- | Remove old, out-of-date host keys from the user's @~/.ssh/known_hosts@ file.
 --
@@ -323,7 +385,14 @@ removeOldHostKeysFromKnownHosts ::
   -- | IP Address or hostname.  Example: @\"123.100.200.3\"@.
   Text ->
   IO ()
-removeOldHostKeysFromKnownHosts = undefined
+removeOldHostKeysFromKnownHosts ipAddr = do
+  (exitCode, _, stderr) <- readProcessWithExitCode "ssh-keygen" ["-R", unpack ipAddr] ""
+  case exitCode of
+    ExitFailure _ -> do
+      error $
+        "remove: removeOldHostKeysFromKnownHosts error running ssh-keygen -R on IP " <> unpack ipAddr <> ": " <>
+        stderr
+    ExitSuccess -> pure ()
 
 -- | Add a set of new SSH host keys to the @~/.ssh/known_hosts@ file.
 --
@@ -333,7 +402,14 @@ addNewHostKeysToKnownHosts ::
   -- what this should look like.
   Text ->
   IO ()
-addNewHostKeysToKnownHosts = undefined
+addNewHostKeysToKnownHosts newSshHostKeys = do
+  homeDir <- getHomeDirectory
+  let knownHosts = homeDir </> ".ssh" </> "known_hosts"
+      knownHostsOld = knownHosts <.> "old"
+      newSshHostKeysRaw = encodeUtf8 newSshHostKeys
+  -- make copy of known hosts
+  copyFile knownHosts knownHostsOld
+  ByteString.appendFile knownHosts ("\n" <> newSshHostKeysRaw)
 
 -- $setup
 --
