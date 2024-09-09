@@ -239,6 +239,7 @@ data Fingerprint = Fingerprint
   , keyType :: Text
     -- ^ Type of key.  Example: @"RSA"@
   }
+  deriving stock Show
 
 type Parser = Parsec Text ()
 
@@ -262,9 +263,11 @@ fingerprintsParser = do
     [] -> error "fingerprintsParser: sepEndBy1 is never expected to return empty list"
     (h : ts) -> pure $ h :| ts
 
--- | 
+-- | Parse a single 'Fingerprint'.
 --
--- >>> parseTest fingerprints
+-- >>> let finger = "3072 SHA256:dRJ/XiNOlh9UGnnN5/a2N+EMSP+OkqyHy8WTzHlUt5U root@cloudy-complete-knife (RSA)"
+-- >>> parseTest fingerprintParser finger
+-- Fingerprint {size = 3072, fingerprint = "SHA256:dRJ/XiNOlh9UGnnN5/a2N+EMSP+OkqyHy8WTzHlUt5U", server = "root@cloudy-complete-knife", keyType = "RSA"}
 fingerprintParser :: Parser Fingerprint
 fingerprintParser = do
   size <- int
