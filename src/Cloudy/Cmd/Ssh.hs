@@ -19,8 +19,9 @@ mkSettings _localConfFileOpts cliOpts = do
   pure SshSettings { selectInstBy }
 
 runSsh :: LocalConfFileOpts -> SshCliOpts -> IO ()
-runSsh localConfFileOpts scalewayOpts = do
-  settings <- mkSettings localConfFileOpts scalewayOpts
+runSsh localConfFileOpts cliOpts = do
+  print cliOpts
+  settings <- mkSettings localConfFileOpts cliOpts
   ipAddr <- withCloudyDb $ \conn -> do
     instanceInfo <- findInstanceInfoForSelectInstBy conn settings.selectInstBy
     case instanceInfo of
