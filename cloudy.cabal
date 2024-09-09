@@ -65,6 +65,7 @@ library
                      , network
                      , network-bsd
                      , optparse-applicative
+                     , parsec
                      , pretty-simple
                      , random
                      , servant

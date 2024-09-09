@@ -78,11 +78,11 @@ runCreate localConfFileOpts scalewayOpts = do
     waitForSshPort scalewayIpAddr
     putStrLn "SSH now available on the instance."
     putStrLn "Getting instance SSH key fingerprints..."
-    rawSshKeyFingerprints <- runScalewayClientM
+    rawSshKeyFingerprintsFromScalewayApi <- runScalewayClientM
       (\err -> error $ "ERROR! Problem getting instance SSH key fingerprints: " <> show err)
       (getSshKeyFingerprints settings scalewayServerId)
     -- TODO: parse ssh key fingerprints and update ~/.ssh/known_hosts
-    undefined
+    updateSshHostKeys rawSshKeyFingerprintsFromScalewayApi scalewayIpAddr
 
 
 createScalewayServer :: ScalewayCreateSettings -> Text -> ClientM (ServerId, IpId, Text)
@@ -180,3 +180,70 @@ getSshKeyFingerprints settings serverId = do
 -- 3072 SHA256:dRJ/XiNOlh9UGnnN5/a2N+EMSP+OkqyHy8WTzHlUt5U root@cloudy-complete-knife (RSA)
 -- 256 SHA256:n6fLRD4O2Me3bRXhzHyCca1vWdQ2utxuPZVsIDUm6o0 root@cloudy-complete-knife (ECDSA)
 -- 256 SHA256:PMESLB3kYYV/8YHS/5Q3wLdufjqhZ/flkQolLIth/KE root@cloudy-complete-knife (ED25519)
+
+updateSshHostKeys ::
+  Text ->
+  -- | IP Address
+  Text ->
+  IO ()
+updateSshHostKeys rawFingerprintsFromScalewayApi ipAddr = do
+  fingerprintsFromScalewayApi <-
+    fromEitherM
+      (\parseErr ->
+          error $
+            "Error parsing SSH host fingerprints from Scaleway metadata api: " <>
+            show parseErr
+      )
+      (parseFingerprints "scaleway-metadata-api" rawFingerprintsFromScalewayApi)
+  rawHostKeys <- getSshHostKeys ipAddr
+  rawFingerprintsFromHost <- fingerprintsFromHostKeys rawSshHostKeys
+  fingerprintsFromHost <-
+    fromEitherM
+      (\parseErr ->
+          error $
+            "Error parsing SSH host fingerprints directly from instance: " <>
+            show parseErr
+      )
+      (parseFingerprints "host" rawFingerprintsFromScalewayApi)
+  if doFingerprintsMatch fingerprintsFromScalewayApi fingerprintsFromHost
+    then do
+      removeOldHostKeysFromKnownHosts ipAddr
+      addNewHostKeysToKnownHosts rawHostKeys
+    else do
+      error $
+        "ERROR: Fingerprints from scaleway metadata api, and fingerprints " <>
+        "directly from host don't match.\n\nFrom metadata api:\n\n" <>
+        rawFingerprintsFromScalewayApi <>
+        "\n\nFrom host: \n\n" <>
+        rawFingerprintsFromHost
+
+
+-- | This datatype represents a line from an SSH fingerprint file, normally as
+-- output by @ssh-keygen -l@.
+--
+-- Here's an example line:
+--
+-- > 3072 SHA256:dRJ/XiNOlh9UGnnN5/a2N+EMSP+OkqyHy8WTzHlUt5U root@cloudy-complete-knife (RSA)
+data Fingerprint = Fingerpint
+  { size :: Int
+    -- ^ Size of the key.  Example: @3072@
+  , fingerprint :: Text
+    -- ^ The fingerprint of the key.  Example: @"SHA256:n6fLRD4O2Me3bRXhzHyCca1vWdQ2utxuPZVsIDUm6o0"@
+  , fingerServer :: Text
+    -- ^ User and hostname.  Example: @"root\@cloudy-complete-knife"@
+  , fingerKeyType :: Text
+    -- ^ Type of key.  Example: @"RSA"@
+  }
+
+parseFingerprints ::
+  -- | Where are these fingerprints coming from?
+  --
+  -- Just used in error output to help debugging.
+  Text ->
+  -- | The raw fingerprint file.  See 'Fingerprint' for what a single line of
+  -- this file looks like.  The whole file is just multiple of these lines,
+  -- separate by a new line.
+  Text ->
+  Either ParseError [Fingerprint]
+parseFingerprints fromWhere rawFingerpintText = do
+  parse fingerprintsParser fromWhere rawFingerprintText
