@@ -75,6 +75,7 @@ library
                      , sqlite-simple
                      , text
                      , time
+                     , unix
                      , uuid
                      , yaml
   ghc-options:         -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates

@@ -217,7 +217,10 @@ updateSshHostKeys rawFingerprintsFromScalewayApi ipAddr = do
       (parseFingerprints "host" rawFingerprintsFromScalewayApi)
   case doFingerprintsMatch fingerprintsFromScalewayApi fingerprintsFromHost of
     FingerprintsMatch -> do
-      putStrLn "Fingerprints match between Scaleway metadata API and actual instance, so removing old known hosts keys, and adding new known host keys..."
+      putStrLn $
+        "Fingerprints match between Scaleway metadata API and actual " <>
+        "instance, so removing old known hosts keys for the IP address, " <>
+        "and adding new known host keys..."
       removeOldHostKeysFromKnownHosts ipAddr
       addNewHostKeysToKnownHosts rawHostKeys
       putStrLn "Added known host keys for new instance."
