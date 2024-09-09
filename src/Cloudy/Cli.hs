@@ -16,8 +16,9 @@ import Cloudy.Db (CloudyInstanceId (..))
 import Data.Text (Text)
 import Options.Applicative
   ( Alternative((<|>)), Parser, (<**>), command, fullDesc, header, info
-  , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument )
+  , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc )
 import Control.Applicative (Alternative(many))
+import Options.Applicative.Help (vsep)
 
 data CliCmd
   = Aws AwsCliOpts
@@ -90,24 +91,38 @@ cliCmdParser = hsubparser subParsers <|> list
             ( progDesc "SSH to currently running compute instances" <>
               noIntersperse <>
               forwardOptions <>
-              footer
-                "This command internally execs SSH like the following:\n\n\
-                \  $ ssh root@123.234.9.9\n\n\
-                \Any additional arguments specified to this function will be passed to SSH as-is. \
-                \For instance, if you run the following command:\n\n\
-                \  $ cloudy ssh ls /\n\n\
-                \then internally it will exec SSH like the following:\n\n\
-                \  $ ssh root@123.234.9.9 ls /\n\n\
-                \Note that if you want to pass an option to SSH that matches \
-                \an option understood by Cloudy, use \"--\" to separate arguments. \
-                \For instance, if you run the following command:\n\n\
-                \  $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa\n\n\
-                \Cloudy will internally exec the following SSH command against the \
-                \instance called \"pumpkin-dog\":\n\n\
-                \  $ ssh root@123.234.9.9 -i ~/.ssh/my_id_rsa\n\n\
-                \SSH also understands the \"--\" argument, so you may need to \
-                \combine these depending on what you're trying to do:\n\n\
-                \  $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa -- ls -i /"
+              (footerDoc . Just $
+                -- TODO: do this better
+                vsep
+                  [ "This command internally execs SSH like the following:"
+                  , ""
+                  , "  $ ssh root@123.234.9.9"
+                  , ""
+                  , "Any additional arguments specified to this function will be passed to SSH as-is. \
+                    \For instance, if you run the following command:"
+                  , ""
+                  , "  $ cloudy ssh ls /"
+                  , ""
+                  , "then internally it will exec SSH like the following:"
+                  , ""
+                  , "  $ ssh root@123.234.9.9 ls /"
+                  , ""
+                  , "Note that if you want to pass an option to SSH that matches \
+                    \an option understood by Cloudy, use \"--\" to separate arguments. \
+                    \For instance, if you run the following command:"
+                  , ""
+                  , "  $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa"
+                  , ""
+                  , "Cloudy will internally exec the following SSH command against the \
+                    \instance named \"pumpkin-dog\":"
+                  , ""
+                  , "  $ ssh root@123.234.9.9 -i ~/.ssh/my_id_rsa"
+                  , ""
+                  , "SSH also understands the \"--\" argument, so you may need to \
+                    \combine these depending on what you're trying to do:"
+                  , ""
+                  , "  $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa -- ls -i /"
+                  ])
             )
         )
 
