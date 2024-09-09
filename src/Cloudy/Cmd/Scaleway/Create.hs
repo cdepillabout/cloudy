@@ -13,10 +13,16 @@ import Data.Text (Text, pack, unpack)
 import Data.Time (getCurrentTime)
 import Servant.Client (ClientM)
 import Servant.API (NoContent(NoContent))
-import Control.Monad (when)
+import Control.Monad (when, void)
 import Network.Socket (AddrInfo(..), SocketType (Stream), defaultHints, getAddrInfo, openSocket, gracefulClose, connect)
 import Control.Exception (bracket, SomeException, try)
 import Control.Concurrent (threadDelay)
+import Text.Parsec (ParseError, parse, Parsec, sepBy1, newline, space, eof, sepEndBy1, digit, char, anyChar, manyTill)
+import Control.FromSum (fromEitherM)
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.Word (Word64)
+import Control.Applicative (some)
+import Text.Read (readMaybe)
 
 data ScalewayCreateSettings = ScalewayCreateSettings
   { secretKey :: Text
@@ -196,7 +202,7 @@ updateSshHostKeys rawFingerprintsFromScalewayApi ipAddr = do
       )
       (parseFingerprints "scaleway-metadata-api" rawFingerprintsFromScalewayApi)
   rawHostKeys <- getSshHostKeys ipAddr
-  rawFingerprintsFromHost <- fingerprintsFromHostKeys rawSshHostKeys
+  rawFingerprintsFromHost <- fingerprintsFromHostKeys rawHostKeys
   fingerprintsFromHost <-
     fromEitherM
       (\parseErr ->
@@ -213,10 +219,9 @@ updateSshHostKeys rawFingerprintsFromScalewayApi ipAddr = do
       error $
         "ERROR: Fingerprints from scaleway metadata api, and fingerprints " <>
         "directly from host don't match.\n\nFrom metadata api:\n\n" <>
-        rawFingerprintsFromScalewayApi <>
+        unpack rawFingerprintsFromScalewayApi <>
         "\n\nFrom host: \n\n" <>
-        rawFingerprintsFromHost
-
+        unpack rawFingerprintsFromHost
 
 -- | This datatype represents a line from an SSH fingerprint file, normally as
 -- output by @ssh-keygen -l@.
@@ -224,16 +229,18 @@ updateSshHostKeys rawFingerprintsFromScalewayApi ipAddr = do
 -- Here's an example line:
 --
 -- > 3072 SHA256:dRJ/XiNOlh9UGnnN5/a2N+EMSP+OkqyHy8WTzHlUt5U root@cloudy-complete-knife (RSA)
-data Fingerprint = Fingerpint
-  { size :: Int
+data Fingerprint = Fingerprint
+  { size :: Word64
     -- ^ Size of the key.  Example: @3072@
   , fingerprint :: Text
     -- ^ The fingerprint of the key.  Example: @"SHA256:n6fLRD4O2Me3bRXhzHyCca1vWdQ2utxuPZVsIDUm6o0"@
-  , fingerServer :: Text
+  , server :: Text
     -- ^ User and hostname.  Example: @"root\@cloudy-complete-knife"@
-  , fingerKeyType :: Text
+  , keyType :: Text
     -- ^ Type of key.  Example: @"RSA"@
   }
+
+type Parser = Parsec Text ()
 
 parseFingerprints ::
   -- | Where are these fingerprints coming from?
@@ -244,6 +251,87 @@ parseFingerprints ::
   -- this file looks like.  The whole file is just multiple of these lines,
   -- separate by a new line.
   Text ->
-  Either ParseError [Fingerprint]
-parseFingerprints fromWhere rawFingerpintText = do
-  parse fingerprintsParser fromWhere rawFingerprintText
+  Either ParseError (NonEmpty Fingerprint)
+parseFingerprints fromWhere rawFingerprintText = do
+  parse (fingerprintsParser <* eof) (unpack fromWhere) rawFingerprintText
+
+fingerprintsParser :: Parser (NonEmpty Fingerprint)
+fingerprintsParser = do
+  fingerprints <- sepEndBy1 fingerprintParser newline
+  case fingerprints of
+    [] -> error "fingerprintsParser: sepEndBy1 is never expected to return empty list"
+    (h : ts) -> pure $ h :| ts
+
+-- | 
+--
+-- >>> parseTest fingerprints
+fingerprintParser :: Parser Fingerprint
+fingerprintParser = do
+  size <- int
+  void space
+  fingerprint <- pack <$> manyTill anyChar space
+  server <- pack <$> manyTill anyChar space
+  void $ char '('
+  keyType <- pack <$> manyTill anyChar (char ')')
+  pure $ Fingerprint { size, fingerprint, server, keyType }
+  where
+    int :: Parser Word64
+    int = do
+      digits <- some digit
+      case readMaybe digits of
+        Nothing -> fail $ "Couldn't read digits as Word64: " <> digits
+        Just i -> pure i
+
+-- | Returns the SSH host keys for the given host.
+--
+-- This effectively just runs @ssh-keyscan@ on the given host.
+--
+-- This returns an output that looks like the following:
+--
+-- > 123.100.200.3 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCiRtLMhK1Dh72tpJIXF+NjLAPPyXbq/tYC0ztDTMBFfQEj2jixURcugtGM7WjcqDCHHgnPDcSHrlkl9dMOV0MvjA2WxNupDU1bPQ31h10rIiiSjL+IB+c9e1wEgJylt72pDPzxDjdNfuAS3gspOjYNuy2vRBlV8rQ9GDlSoSvqMGbQ7W9bdCLnANsUkI+FCXFZCzIL3MU26ddqrBdCgiTvFUVxHjfFJMxwsKwLa18P6dc586mYXocmQGwjyXfJCiOw5kajvH4a9BzRr21nQT23GI2e4RlJ2Rkum9lazBNaVaQBYIUgLVVFMSfxbEt2GGBv82UKbQTbk6KHrrKE8ABYmkE81lgE+8zlnh6lxlaEQ9if6/KvtwP97g0md3hxc9b2MvGnQLEX9jjHJ/B9bHW7jJzqWRQAnCQZzenbyTht5lNK480Q9qGTu0h8FNteapzos/JnQ3B8taGQI5fpxosRLyhX3wzdQrmaAiBnILgYV2sPWZT3th0M6gsLDi4ao40=
+-- > 123.100.200.3 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBJKYO35BsIkFjiAXACgkWzTC+tA2sH5RSqoYoGq8Lv+
+-- > 123.100.200.3 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKR0UH9ZSmUyYUJfE/4mUT4SLZ9wskvsCXkVL8QNIprmFt7Zz7eRerQVyqoOm4/Zhu2OWlleqfIWOmuyPDGkImo=
+getSshHostKeys ::
+  -- | IP Address or hostname.  Example: @\"123.100.200.3\"@
+  Text ->
+  IO Text
+getSshHostKeys = undefined
+
+-- | Return the fingerprints for a set of raw host keys.
+--
+-- This effectively just runs @ssh-keygen -l@ on a set of raw host keys.
+--
+-- See the docs for 'Fingerprint' for what this function outputs.
+fingerprintsFromHostKeys ::
+  -- | A newline-separated file of SSH host keys.  See the output of
+  -- 'getSshHostKeys' for what this should look like.
+  Text ->
+  IO Text
+fingerprintsFromHostKeys = undefined
+
+-- | Return 'True' if two sets of fingerprints match.
+doFingerprintsMatch :: NonEmpty Fingerprint -> NonEmpty Fingerprint -> Bool
+doFingerprintsMatch = undefined
+
+-- | Remove old, out-of-date host keys from the user's @~/.ssh/known_hosts@ file.
+--
+-- This effectively just runs @ssh-keygen -R@ on the passed-in IP address.
+removeOldHostKeysFromKnownHosts ::
+  -- | IP Address or hostname.  Example: @\"123.100.200.3\"@.
+  Text ->
+  IO ()
+removeOldHostKeysFromKnownHosts = undefined
+
+-- | Add a set of new SSH host keys to the @~/.ssh/known_hosts@ file.
+--
+-- This effectively just appends the passed-in host keys to the file.
+addNewHostKeysToKnownHosts ::
+  -- | A set of SSH host keys.  See the output of 'getSshHostKeys' for
+  -- what this should look like.
+  Text ->
+  IO ()
+addNewHostKeysToKnownHosts = undefined
+
+-- $setup
+--
+-- >>> import Text.Parsec (parseTest)

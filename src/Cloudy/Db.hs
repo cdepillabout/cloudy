@@ -364,17 +364,17 @@ invariantEveryCloudyInstHasExactlyOneProviderInst conn = do
   where
     checkCloudyInstProviders :: CloudyInstanceId -> IO (Maybe DbInvariantErr)
     checkCloudyInstProviders cloudyInstId = do
-    maybeScalewayInstId :: Maybe Text <-
-      fmap fromOnly <$>
-        queryUnique
-          conn
-          "SELECT scaleway_instance_id \
-          \FROM scaleway_instance \
-          \WHERE cloudy_instance_id == ?"
-          (Only cloudyInstId)
-    case maybeScalewayInstId of
-      Just _scalewayInstId -> pure Nothing
-      Nothing -> pure $ Just $ CloudyInstanceHasNoProviderInstance cloudyInstId
+      maybeScalewayInstId :: Maybe Text <-
+        fmap fromOnly <$>
+          queryUnique
+            conn
+            "SELECT scaleway_instance_id \
+            \FROM scaleway_instance \
+            \WHERE cloudy_instance_id == ?"
+            (Only cloudyInstId)
+      case maybeScalewayInstId of
+        Just _scalewayInstId -> pure Nothing
+        Nothing -> pure $ Just $ CloudyInstanceHasNoProviderInstance cloudyInstId
 
 -- | Cloudy instances should always have a @created_at@ value that is non-null.
 --
