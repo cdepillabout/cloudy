@@ -16,7 +16,7 @@ import Cloudy.Db (CloudyInstanceId (..))
 import Data.Text (Text)
 import Options.Applicative
   ( Alternative((<|>)), Parser, (<**>), command, fullDesc, header, info
-  , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc )
+  , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc, flag', flag )
 import Control.Applicative (Alternative(many))
 import Options.Applicative.Help (vsep)
 
@@ -25,6 +25,7 @@ data CliCmd
   | List ListCliOpts
   | Scaleway ScalewayCliOpts
   | Ssh SshCliOpts
+  | CopyFile CopyFileCliOpts
   | Destroy DestroyCliOpts
   deriving stock Show
 
@@ -38,10 +39,28 @@ data SshCliOpts = SshCliOpts
   }
   deriving stock Show
 
+data CopyFileCliOpts = CopyFileCliOpts
+  { id :: Maybe CloudyInstanceId
+  , name :: Maybe Text
+  , direction :: CopyFileDirection
+  , recursive :: Recursive
+  , passthru :: [Text]
+  }
+  deriving stock Show
+
 data DestroyCliOpts = DestroyCliOpts
   { id :: Maybe CloudyInstanceId
   , name :: Maybe Text
   }
+  deriving stock Show
+
+-- | Which direction to copy files in the @copy-file@ command
+data CopyFileDirection = FromInstanceToLocal | ToInstanceFromLocal
+  deriving stock Show
+
+-- | Whether or not to recursively copy files from directories in the
+-- @copy-file@ command.
+data Recursive = Recursive | NoRecursive
   deriving stock Show
 
 parseCliOpts :: IO CliCmd
@@ -57,7 +76,13 @@ cliCmdParserInfo = info (cliCmdParser <**> helper)
 cliCmdParser :: Parser CliCmd
 cliCmdParser = hsubparser subParsers <|> list
   where
-    subParsers = awsCommand <> listCommand <> scalewayCommand <> sshCommand <> destroyCommand
+    subParsers =
+      awsCommand <>
+      scalewayCommand <>
+      listCommand <>
+      sshCommand <>
+      copyFileCommand <>
+      destroyCommand
 
     awsCommand =
       command
@@ -65,14 +90,6 @@ cliCmdParser = hsubparser subParsers <|> list
         ( info
             (fmap Aws awsCliOptsParser)
             (progDesc "Run AWS-specific commands")
-        )
-
-    listCommand =
-      command
-        "list"
-        ( info
-            list
-            (progDesc "List currently running compute instances")
         )
 
     scalewayCommand =
@@ -83,6 +100,14 @@ cliCmdParser = hsubparser subParsers <|> list
             (progDesc "Run Scaleway-specific commands")
         )
 
+    listCommand =
+      command
+        "list"
+        ( info
+            list
+            (progDesc "List currently running compute instances")
+        )
+
     sshCommand =
       command
         "ssh"
@@ -90,38 +115,58 @@ cliCmdParser = hsubparser subParsers <|> list
             (fmap Ssh sshCliOptsParser)
             ( progDesc "SSH to currently running compute instances" <>
               noIntersperse <>
-              forwardOptions <>
               (footerDoc . Just $
                 -- TODO: do this better
                 vsep
-                  [ "This command internally execs SSH like the following:"
+                  [ "This command internally executes SSH like the following:"
                   , ""
-                  , "  $ ssh root@123.234.9.9"
+                  , "    $ ssh root@12.34.9.9"
                   , ""
                   , "Any additional arguments specified to this function will be passed to SSH as-is. \
                     \For instance, if you run the following command:"
                   , ""
-                  , "  $ cloudy ssh ls /"
+                  , "    $ cloudy ssh ls /"
                   , ""
-                  , "then internally it will exec SSH like the following:"
+                  , "then internally it will execute SSH like the following:"
                   , ""
-                  , "  $ ssh root@123.234.9.9 ls /"
+                  , "    $ ssh root@12.34.9.9 ls /"
                   , ""
                   , "Note that if you want to pass an option to SSH that matches \
                     \an option understood by Cloudy, use \"--\" to separate arguments. \
                     \For instance, if you run the following command:"
                   , ""
-                  , "  $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa"
+                  , "    $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa"
                   , ""
-                  , "Cloudy will internally exec the following SSH command against the \
+                  , "Cloudy will internally execute the following SSH command against the \
                     \instance named \"pumpkin-dog\":"
                   , ""
-                  , "  $ ssh root@123.234.9.9 -i ~/.ssh/my_id_rsa"
+                  , "    $ ssh root@12.34.9.9 -i ~/.ssh/my_id_rsa"
                   , ""
                   , "SSH also understands the \"--\" argument, so you may need to \
                     \combine these depending on what you're trying to do:"
                   , ""
-                  , "  $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa -- ls -i /"
+                  , "    $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa -- ls -i /"
+                  ])
+            )
+        )
+
+    copyFileCommand =
+      command
+        "copy-file"
+        ( info
+            (fmap CopyFile copyFileCliOptsParser)
+            ( progDesc "Copy files to/from currently running compute instances" <>
+              forwardOptions <>
+              (footerDoc . Just $
+                -- TODO: do this better
+                vsep
+                  [ "Here's an example of using this command:"
+                  , ""
+                  , "    $ cloudy copy-file -i pumpkin-dog --from-instance my-file-remote1 my-file-remote2 ./my-dir-local/"
+                  , ""
+                  , "This internally uses SCP to copy files, running a command like the following:"
+                  , ""
+                  , "    $ scp root@12.34.9.9:my-file-remote1 root@12.34.9.9:my-file-remote2 ./my-dir-local/"
                   ])
             )
         )
@@ -154,6 +199,15 @@ sshCliOptsParser =
     <*> cloudyInstanceNameParser
     <*> passthruArgs
 
+copyFileCliOptsParser :: Parser CopyFileCliOpts
+copyFileCliOptsParser =
+  CopyFileCliOpts
+    <$> cloudyInstanceIdParser
+    <*> cloudyInstanceNameParser
+    <*> directionParser
+    <*> recursiveParser
+    <*> copyFilesParser
+
 destroyCliOptsParser :: Parser DestroyCliOpts
 destroyCliOptsParser =
   DestroyCliOpts
@@ -184,6 +238,8 @@ cloudyInstanceNameParser = fmap Just innerParser <|> pure Nothing
         )
 
 -- | Parser for arguments that are not really parsed, just passed through.
+--
+-- Used to pass through arguments to SSH.
 passthruArgs :: Parser [Text]
 passthruArgs =
   many $
@@ -192,3 +248,39 @@ passthruArgs =
         help "Arguments to passthru to SSH"
       )
 
+-- | Parser for file names for the copy-files command.
+copyFilesParser :: Parser [Text]
+copyFilesParser =
+  many $
+    strArgument
+      ( metavar "FILE..." <>
+        help "File names to copy to/from"
+      )
+
+directionParser :: Parser CopyFileDirection
+directionParser =
+  let fromInstanceFlag =
+        flag'
+          FromInstanceToLocal
+          ( long "from-instance" <>
+            short 'f' <>
+            help "Copy files FROM CLOUD INSTANCE to your local machine"
+          )
+      toInstanceFlag =
+        flag'
+          FromInstanceToLocal
+          ( long "to-instance" <>
+            short 't' <>
+            help "Copy files from your local machine TO CLOUD INSTANCE"
+          )
+  in fromInstanceFlag <|> toInstanceFlag
+
+recursiveParser :: Parser Recursive
+recursiveParser =
+  flag
+    NoRecursive
+    Recursive
+    ( long "recursive" <>
+      short 'r' <>
+      help "Recursively copy entire directories"
+    )
