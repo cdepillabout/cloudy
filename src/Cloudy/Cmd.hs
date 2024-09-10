@@ -3,6 +3,7 @@ module Cloudy.Cmd where
 
 import Cloudy.Cli (CliCmd (..))
 import Cloudy.Cmd.Aws (runAws)
+import Cloudy.Cmd.CopyFile (runCopyFile)
 import Cloudy.Cmd.List (runList)
 import Cloudy.Cmd.Scaleway (runScaleway)
 import Cloudy.Cmd.Ssh (runSsh)
@@ -15,4 +16,5 @@ runCmd localConfFileOpts = \case
   List listCliOpts -> runList localConfFileOpts listCliOpts
   Scaleway scalewayCliOpts -> runScaleway localConfFileOpts scalewayCliOpts
   Ssh sshCliOpts -> runSsh localConfFileOpts sshCliOpts
+  CopyFile copyFileCliOpts -> runCopyFile localConfFileOpts copyFileCliOpts
   Destroy destroyCliOpts -> runDestroy localConfFileOpts destroyCliOpts

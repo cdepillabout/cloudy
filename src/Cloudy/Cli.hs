@@ -6,7 +6,10 @@ module Cloudy.Cli
   , AwsCliOpts(..)
   , ListCliOpts(..)
   , SshCliOpts(..)
+  , CopyFileCliOpts(..)
   , DestroyCliOpts(..)
+  , CopyFileDirection(..)
+  , Recursive(..)
   )
   where
 
@@ -44,7 +47,7 @@ data CopyFileCliOpts = CopyFileCliOpts
   , name :: Maybe Text
   , direction :: CopyFileDirection
   , recursive :: Recursive
-  , passthru :: [Text]
+  , filesToCopyArgs :: [Text]
   }
   deriving stock Show
 
