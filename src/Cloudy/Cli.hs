@@ -291,7 +291,7 @@ directionParser =
           )
       toInstanceFlag =
         flag'
-          FromInstanceToLocal
+          ToInstanceFromLocal
           ( long "to-instance" <>
             short 't' <>
             help "Copy files from your local machine TO CLOUD INSTANCE"
