@@ -37,6 +37,7 @@ library
                        Cloudy.Cli.Utils
                        Cloudy.Cmd
                        Cloudy.Cmd.Aws
+                       Cloudy.Cmd.CopyFile
                        Cloudy.Cmd.Destroy
                        Cloudy.Cmd.List
                        Cloudy.Cmd.Scaleway

@@ -146,7 +146,8 @@ cliCmdParser = hsubparser subParsers <|> list
                     \combine these depending on what you're trying to do:"
                   , ""
                   , "    $ cloudy ssh -i pumpkin-dog -- -i ~/.ssh/my_id_rsa -- ls -i /"
-                  ])
+                  ]
+              )
             )
         )
 
@@ -160,14 +161,33 @@ cliCmdParser = hsubparser subParsers <|> list
               (footerDoc . Just $
                 -- TODO: do this better
                 vsep
-                  [ "Here's an example of using this command:"
+                  [ "Here's an example of using this command to copy files from \
+                    \the cloud instance to your local machine:"
                   , ""
                   , "    $ cloudy copy-file -i pumpkin-dog --from-instance my-file-remote1 my-file-remote2 ./my-dir-local/"
                   , ""
-                  , "This internally uses SCP to copy files, running a command like the following:"
+                  , "This internally uses SCP to copy files, running a command \
+                    \like the following:"
                   , ""
                   , "    $ scp root@12.34.9.9:my-file-remote1 root@12.34.9.9:my-file-remote2 ./my-dir-local/"
-                  ])
+                  , ""
+                  , "Cloudy will prepend the correct username and IP address to \
+                    \all the remote files.  Note that this uses SCP's normal \
+                    \rules for paths, so relative paths will be relative to \
+                    \the user's HOME directory.  For instance, in the above \
+                    \command, \"my-file-remote1\" and \"my-file-remote2\" are \
+                    \expected to live in the root user's HOME directory (/root)."
+                  , ""
+                  , "Here's an example of using this command to copy files from \
+                    \your local machine to the cloud instance:"
+                  , ""
+                  , "    $ cloudy copy-file -i pumpkin-dog --to-instance --recursive my-file-local my-dir-local/ my-dir-remote/"
+                  , ""
+                  , "This internally runs a command like the following:"
+                  , ""
+                  , "    $ scp -r my-file-local my-dir-local/ root@12.34.9.9:my-dir-remote/"
+                  ]
+              )
             )
         )
 
