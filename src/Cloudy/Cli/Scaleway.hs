@@ -4,6 +4,7 @@ module Cloudy.Cli.Scaleway where
 import Data.Text (Text)
 import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, Alternative ((<|>)), switch, auto)
 import Cloudy.Cli.Utils (maybeOpt)
+import Control.Applicative (optional)
 
 data ScalewayCliOpts
   = ScalewayCreate ScalewayCreateCliOpts
@@ -16,6 +17,7 @@ data ScalewayCreateCliOpts = ScalewayCreateCliOpts
   , instanceType :: Maybe Text
   , volumeSizeGb :: Int
   , imageId :: Maybe Text
+  , instanceSetup :: Maybe Text
   }
   deriving stock Show
 
@@ -68,6 +70,7 @@ scalewayCreateCliOptsParser =
     <*> instanceTypeParser
     <*> volumeSizeGbParser
     <*> imageIdParser
+    <*> instanceSetupParser
 
 scalewayListInstanceTypesCliOptsParser :: Parser ScalewayListInstanceTypesCliOpts
 scalewayListInstanceTypesCliOptsParser = ScalewayListInstanceTypesCliOpts <$> zoneParser
@@ -122,15 +125,14 @@ archParser =
       _ -> Nothing
 
 nameFilterParser :: Parser (Maybe Text)
-nameFilterParser = fmap Just innerParser <|> pure Nothing
-  where
-    innerParser =
-      strOption
-        ( long "name-filter" <>
-          short 'n' <>
-          metavar "NAME_FILTER" <>
-          help "Only show images whose name contains this value, case-insensitive (default: no filter)"
-        )
+nameFilterParser =
+  optional $
+    strOption
+      ( long "name-filter" <>
+        short 'n' <>
+        metavar "NAME_FILTER" <>
+        help "Only show images whose name contains this value, case-insensitive (default: no filter)"
+      )
 
 allVersionsParser :: Parser Bool
 allVersionsParser =

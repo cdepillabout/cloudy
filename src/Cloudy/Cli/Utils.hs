@@ -1,7 +1,8 @@
 
 module Cloudy.Cli.Utils where
 
-import Options.Applicative (Alternative((<|>)), Parser, help, Mod)
+import Control.Applicative (optional)
+import Options.Applicative (Parser, help, Mod)
 
 -- | This lifts a option 'Parser' to a 'Parser' of 'Maybe', allowing you to
 -- specify a default value.
@@ -19,8 +20,13 @@ import Options.Applicative (Alternative((<|>)), Parser, help, Mod)
 -- set a default value, since 'maybeOpt' returns 'Nothing' if the option was
 -- not given on the command line (but it still shows the default value in the
 -- @--help@ output.
-maybeOpt :: Show a => String -> a -> (Mod f a -> Parser a) -> Mod f a -> Parser (Maybe a)
-maybeOpt helpStr defaultVal p mods =
-  fmap Just (p $ mods <> help helpWithDefaultStr) <|> pure Nothing
+maybeOpt ::
+  Show a =>
+  String ->
+  a ->
+  (Mod f a -> Parser a) ->
+  Mod f a ->
+  Parser (Maybe a)
+maybeOpt helpStr defaultVal p mods = optional (p $ mods <> help helpWithDefaultStr)
   where
     helpWithDefaultStr = helpStr <> " (default: " <> show defaultVal <> ")"

@@ -127,7 +127,7 @@ createScalewayServer settings instanceName = do
   liftIO $ putStrLn $ "servers resp: " <> show serversResp
   let maybeFirstVol = Map.lookup "0" serversResp.volumes
   firstVol <- maybe (error "couldn't find first volume, unexpected") pure maybeFirstVol
-  -- The volume's name has to initial be created as empty (""), and only
+  -- The volume's name has to initially be created as empty (""), and only
   -- after that can we set the name separately.
   serversVolumesResp <-
     volumesPatchApi

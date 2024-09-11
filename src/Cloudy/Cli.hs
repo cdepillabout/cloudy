@@ -20,7 +20,7 @@ import Data.Text (Text)
 import Options.Applicative
   ( Alternative((<|>)), Parser, (<**>), command, fullDesc, header, info
   , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc, flag', flag )
-import Control.Applicative (Alternative(many))
+import Control.Applicative (Alternative(many), optional)
 import Options.Applicative.Help (vsep)
 
 data CliCmd
@@ -250,15 +250,14 @@ cloudyInstanceIdParser = fmap (Just . CloudyInstanceId) innerParser <|> pure Not
         )
 
 cloudyInstanceNameParser :: Parser (Maybe Text)
-cloudyInstanceNameParser = fmap Just innerParser <|> pure Nothing
-  where
-    innerParser =
-      strOption
-        ( long "name" <>
-          short 'n' <>
-          metavar "CLOUDY_INSTANCE_NAME" <>
-          help "Cloudy instance name to operate on."
-        )
+cloudyInstanceNameParser =
+  optional $
+    strOption
+      ( long "name" <>
+        short 'n' <>
+        metavar "CLOUDY_INSTANCE_NAME" <>
+        help "Cloudy instance name to operate on."
+      )
 
 -- | Parser for arguments that are not really parsed, just passed through.
 --
