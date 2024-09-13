@@ -2,9 +2,10 @@
 module Cloudy.Cli.Scaleway where
 
 import Data.Text (Text)
-import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, Alternative ((<|>)), switch, auto)
+import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, Alternative ((<|>)), switch, auto, footerDoc)
 import Cloudy.Cli.Utils (maybeOpt)
 import Control.Applicative (optional)
+import Options.Applicative.Help (vsep)
 
 data ScalewayCliOpts
   = ScalewayCreate ScalewayCreateCliOpts
@@ -44,7 +45,28 @@ scalewayCliOptsParser = hsubparser subParsers
         "create"
         ( info
             (fmap ScalewayCreate scalewayCreateCliOptsParser)
-            (progDesc "Create a new compute instance in Scaleway")
+            ( progDesc "Create a new compute instance in Scaleway" <>
+              (footerDoc . Just $
+                -- TODO: do this better
+                vsep
+                  ( [ "You can use the --instance-setup option to configure which \
+                      \instance setup script is used to setup the instance after \
+                      \boot.  The instance setup scripts generally have a \
+                      \`cloud-init` section, which specifies the actual cloud-init \
+                      \setup to use."
+                    , ""
+                    , "Default instance-setup scripts builtin to Cloudy:"
+                    , ""
+                    ] <>
+                    undefined <>
+                    [ ""
+                    , "User-defined instance-setup scripts in ~/.config/cloudy/instance-setup/:"
+                    , ""
+                    ] <>
+                    undefined
+                  )
+              )
+            )
         )
 
     listInstanceTypesCommand =
@@ -164,3 +186,13 @@ imageIdParser =
       short 'i' <>
       metavar "IMAGE_ID"
     )
+
+instanceSetupParser :: Parser (Maybe Text)
+instanceSetupParser =
+  optional $
+    strOption
+      ( long "instance-setup" <>
+        short 't' <>
+        metavar "INSTANCE_SETUP" <>
+        help "Name of the instance-setup to use when booting the image.  (default: do no instance setup)"
+      )
