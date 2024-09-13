@@ -14,9 +14,10 @@ category:            Productivity
 build-type:          Custom
 extra-source-files:  README.md
                    , default.nix
-                   , shell.nix
+                   , instance-setup/*.yaml
                    , nix/default.nix
                    , nix/overlay.nix
+                   , shell.nix
 
 custom-setup
                    -- Hackage apparently gives an error if you don't specify an

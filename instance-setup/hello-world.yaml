@@ -1,0 +1,7 @@
+
+short-description: A basic hello-world instance-setup that shows how to run a bash script.
+
+cloud-init-user-data: |
+  #!/usr/bin/env bash
+
+  echo "hello world from Cloudy!" > /tmp/hello-from-cloudy
