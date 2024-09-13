@@ -2,7 +2,7 @@
 module Cloudy.Cli.Scaleway where
 
 import Data.Text (Text)
-import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, Alternative ((<|>)), switch, auto, footerDoc)
+import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, switch, auto, footerDoc)
 import Cloudy.Cli.Utils (maybeOpt)
 import Control.Applicative (optional)
 import Options.Applicative.Help (vsep)

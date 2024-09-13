@@ -49,6 +49,7 @@ library
                        Cloudy.Cmd.Ssh
                        Cloudy.Cmd.Utils
                        Cloudy.Db
+                       Cloudy.InstanceSetup
                        Cloudy.LocalConfFile
                        Cloudy.NameGen
                        Cloudy.Path
