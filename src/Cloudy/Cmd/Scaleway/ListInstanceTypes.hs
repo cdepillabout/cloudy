@@ -69,7 +69,7 @@ displayInstanceTypes instanceTypes = do
   let instList = Map.toList instanceTypes
       sortByPriceInstList = sortOn (\(_, (prod, _)) -> prod.monthlyPrice) instList
   case sortByPriceInstList of
-    [] -> undefined
+    [] -> putStrLn "Found no instance types."
     (hInst : tInsts) -> do
       let instTable = mkTable (hInst :| tInsts)
       printTable instTable

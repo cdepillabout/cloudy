@@ -74,7 +74,7 @@ displayImages settings imgs = do
             nubByNameArch volFilteredImages
       sortByModDateImages = sortOn (\img -> img.modificationDate) latestImages
   case sortByModDateImages of
-    [] -> undefined
+    [] -> putStrLn "Found no images."
     (hImg : tImg) -> do
       let imgTable = mkTable (hImg :| tImg)
       printTable imgTable
