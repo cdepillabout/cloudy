@@ -60,6 +60,7 @@ library
                      , bytestring
                      , containers
                      , directory
+                     , file-embed
                      , filepath
                      , from-sum
                      , http-api-data

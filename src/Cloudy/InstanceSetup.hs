@@ -1,24 +1,25 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 
 module Cloudy.InstanceSetup where
 
-import Data.Aeson (FromJSON(..), ToJSON (..), object, (.=), FromJSON, withObject, (.:))
-import Data.Text (Text)
+import Cloudy.InstanceSetup.Types
+import Data.FileEmbed (embedDir)
+import System.FilePath (takeBaseName)
+
+embedBuiltInInstanceSetups :: [InstanceSetup]
+embedBuiltInInstanceSetups =
+  $(do
+      rawFiles <- embedDir "instance-setup/"
+      for rawFiles $ \(fp, rawData) -> do
+        let name = takeBaseName fp
+        eitherInstanceSetupData <- decodeEither' rawData
+        case eitherInstanceSetupData of
+          Left err -> fail $ "Failed to decode instance-setup data in " <> fp <> " as InstanceSetupData: " <> err
+          Right instanceSetupData ->
+            pure $ InstanceSetup { name, instanceSetupData }
+    )
 
 
-data InstanceSetup = InstanceSetup
-  { shortDescription :: Text
-  , cloudInitUserData :: Text
-  }
-
-instance ToJSON InstanceSetup where
-  toJSON InstanceSetup{shortDescription, cloudInitUserData} =
-    object
-      [ "short-description" .= shortDescription
-      , "cloud-init-user-data" .= cloudInitUserData
-      ]
-
-instance FromJSON InstanceSetup where
-  parseJSON = withObject "InstanceSetup" $ \o -> do
-    shortDescription <- o .: "short-description"
-    cloudInitUserData <- o .: "cloud-init-user-data"
-    pure InstanceSetup { shortDescription, cloudInitUserData }
+rawBuiltInInstanceSetups :: [InstanceSetup]
+rawBuiltInInstanceSetups = undefined
