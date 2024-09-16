@@ -4,6 +4,7 @@ module Cloudy.Cmd.List where
 
 import Cloudy.Cli (ListCliOpts (..))
 import Cloudy.Db (CloudyInstance (..), InstanceInfo (..), ScalewayInstance (..), cloudyInstanceFromInstanceInfo, findAllInstanceInfos, withCloudyDb, unCloudyInstanceId)
+import Cloudy.InstanceSetup.Types (InstanceSetup (..))
 import Cloudy.LocalConfFile (LocalConfFileOpts)
 import Cloudy.Table (Table (..), printTable, Align (..))
 import Data.List (sortOn)
@@ -37,6 +38,7 @@ mkTable tz instanceTypes =
         , (LeftJustified, "cloud")
         , (LeftJustified, "zone")
         , (LeftJustified, "ip")
+        , (LeftJustified, "instance setup")
         ]
     , tableBodyRows = fmap (mkRow tz) instanceTypes
     }
@@ -51,6 +53,7 @@ mkRow tz = \case
     , "scaleway"
     , scalewayInstance.scalewayZone
     , scalewayInstance.scalewayIpAddress
+    , prettyInstanceSetup cloudyInstance.instanceSetup
     ]
   where
     formatDateTime :: Maybe UTCTime -> Text
@@ -58,3 +61,8 @@ mkRow tz = \case
       Nothing -> "ERROR: expecting cloudy instance to have created_at value"
       Just createdAt ->
         pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M" $ utcToZonedTime tz createdAt
+
+    prettyInstanceSetup :: Maybe InstanceSetup -> Text
+    prettyInstanceSetup = \case
+      Nothing -> "(none)"
+      Just instSetup -> instSetup.name

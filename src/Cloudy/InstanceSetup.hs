@@ -6,15 +6,18 @@ import Cloudy.InstanceSetup.Types ( InstanceSetup(..) )
 import Cloudy.Path (getCloudyInstanceSetupsDir)
 import Control.DeepSeq (force)
 import Control.FromSum (fromEither)
+import Data.Bifunctor (Bifunctor(first))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import Data.FileEmbed (embedDir)
 import Data.Functor ((<&>))
 import Data.List (sort)
 import Data.Text (pack)
-import Data.Yaml (decodeEither', ParseException)
+import Data.Text.Encoding (decodeUtf8')
+import Data.Yaml (decodeEither', ParseException (OtherParseException))
 import System.Directory (listDirectory)
 import System.FilePath (takeBaseName, takeExtension, (</>))
+import Control.Exception (SomeException(SomeException))
 
 rawBuiltInInstanceSetups :: [(FilePath, ByteString)]
 rawBuiltInInstanceSetups = $(embedDir "instance-setups/")
@@ -41,8 +44,9 @@ builtInInstanceSetups =
 parseInstanceSetup :: FilePath -> ByteString -> Either ParseException InstanceSetup
 parseInstanceSetup fp rawData = do
   let name = pack $ takeBaseName fp
+  rawDataText <- first (OtherParseException . SomeException) $ decodeUtf8' rawData
   instanceSetupData <- decodeEither' rawData
-  pure $ InstanceSetup { name, instanceSetupData, rawInstanceSetupData = rawData }
+  pure $ InstanceSetup { name, instanceSetupData, rawInstanceSetupData = rawDataText }
 
 
 getUserInstanceSetups :: IO [InstanceSetup]

@@ -3,20 +3,24 @@
 
 module Cloudy.Db where
 
+import Cloudy.InstanceSetup.Types (InstanceSetup (..))
 import Cloudy.NameGen (instanceNameGen)
 import Cloudy.Path (getCloudyDbPath)
 import Control.Exception (Exception, throwIO)
+import Data.Aeson (eitherDecode)
+import qualified Data.ByteString as ByteString
 import Data.Foldable (fold)
 import Data.Int (Int64)
 import Data.List (find)
 import Data.Maybe (listToMaybe, catMaybes)
 import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
 import Data.Time ( UTCTime, getCurrentTime )
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
 import Data.Traversable (for)
 import Data.Void (Void)
 import Database.SQLite.Simple (withConnection, Connection, execute_, Query, query_, FromRow (..), ToRow (..), execute, withTransaction, lastInsertRowId, query, Only (..), field)
-import Database.SQLite.Simple.FromField (FromField)
+import Database.SQLite.Simple.FromField (FromField (..))
 import Database.SQLite.Simple.ToField (ToField)
 
 createLocalDatabase :: Connection -> IO ()
@@ -28,6 +32,7 @@ createLocalDatabase conn = do
     \  , name TEXT NOT NULL UNIQUE \
     \  , created_at INTEGER \
     \  , deleted_at INTEGER \
+    \  , instance_setup TEXT \
     \  ) \
     \STRICT"
   execute_
@@ -122,6 +127,7 @@ data CloudyInstance = CloudyInstance
   , name :: Text
   , createdAt :: Maybe UTCTime
   , deletedAt :: Maybe UTCTime
+  , instanceSetup :: Maybe InstanceSetup
   }
   deriving stock (Eq, Show)
 
@@ -131,7 +137,23 @@ instance FromRow CloudyInstance where
     name <- field
     createdAt <- fmap utcTimeFromSqliteInt <$> field
     deletedAt <- fmap utcTimeFromSqliteInt <$> field
-    pure $ CloudyInstance { id = id', name, createdAt, deletedAt }
+    instanceSetup <- fmap unDbInstanceSetup <$> field
+    pure $ CloudyInstance { id = id', name, createdAt, deletedAt, instanceSetup }
+
+-- | newtype to hold the 'FromField' instance for 'InstanceSetup', for use in
+-- the 'FromRow' instance for 'CloudyInstance'.
+--
+-- The @instance_setup@ column in the @cloudy_instance@ table holds a
+-- JSON-encoded 'InstanceSetup' value.
+newtype DbInstanceSetup = DbInstanceSetup { unDbInstanceSetup :: InstanceSetup }
+
+instance FromField DbInstanceSetup where
+  fromField fld = do
+    rawInstanceSetup :: Text <- fromField fld
+    let eitherInstanceSetup = eitherDecode $ ByteString.fromStrict $ encodeUtf8 rawInstanceSetup
+    case eitherInstanceSetup of
+      Left err -> fail $ "Failed to json decode instance_setup column as InstanceSetup: " <> err
+      Right instanceSetup -> pure $ DbInstanceSetup instanceSetup
 
 data ScalewayInstance = ScalewayInstance
   { cloudyInstanceId :: CloudyInstanceId
@@ -193,7 +215,7 @@ findCloudyInstanceByNameWithDeleted conn cloudyInstanceName = do
   listToMaybe <$>
     query
       conn
-      "SELECT id, name, created_at, deleted_at \
+      "SELECT id, name, created_at, deleted_at, instance_setup \
       \FROM cloudy_instance \
       \WHERE name == ? \
       \ORDER BY id"
@@ -214,7 +236,7 @@ findCloudyInstanceById conn cloudyInstanceId = do
   listToMaybe <$>
     query
       conn
-      "SELECT id, name, created_at, deleted_at \
+      "SELECT id, name, created_at, deleted_at, instance_setup \
       \FROM cloudy_instance \
       \WHERE id == ? AND deleted_at IS NULL AND created_at IS NOT NULL"
       (Only cloudyInstanceId)
@@ -223,7 +245,7 @@ findAllCloudyInstances :: Connection -> IO [CloudyInstance]
 findAllCloudyInstances conn =
   query_
     conn
-    "SELECT id, name, created_at, deleted_at \
+    "SELECT id, name, created_at, deleted_at, instance_setup \
     \FROM cloudy_instance \
     \WHERE deleted_at IS NULL AND created_at IS NOT NULL"
 
