@@ -21,9 +21,10 @@ rawBuiltInInstanceSetups = $(embedDir "instance-setups/")
 
 builtInInstanceSetups :: [InstanceSetup]
 builtInInstanceSetups =
-  -- We want to make sure any YAML decoding errors are surfaced the very first
-  -- time builtInInstanceSetups is used.  We should almost never see any
-  -- errors, since we control the raw instance-setup files that are used here.
+  -- force is used here because we want to make sure any YAML decoding errors
+  -- are surfaced the very first time builtInInstanceSetups is used.  We should
+  -- almost never see any errors, since we control the raw instance-setup files
+  -- that are used here.
   --
   -- We also have tests that should catch problems with decoding these
   -- instance-setup files.
