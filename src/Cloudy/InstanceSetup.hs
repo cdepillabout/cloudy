@@ -2,15 +2,18 @@
 
 module Cloudy.InstanceSetup where
 
-import Cloudy.InstanceSetup.Types
+import Cloudy.InstanceSetup.Types ( InstanceSetup(..) )
 import Control.DeepSeq (force)
 import Control.FromSum (fromEither)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as ByteString
 import Data.FileEmbed (embedDir)
 import Data.Text (pack)
 import Data.Yaml (decodeEither', ParseException)
-import System.FilePath (takeBaseName)
+import System.FilePath (takeBaseName, takeExtension)
 import Data.Functor ((<&>))
+import Cloudy.Path (getCloudyInstanceSetupsDir)
+import System.Directory (listDirectory)
 
 rawBuiltInInstanceSetups :: [(FilePath, ByteString)]
 rawBuiltInInstanceSetups = $(embedDir "instance-setup/")
@@ -38,3 +41,22 @@ parseInstanceSetup fp rawData = do
   let name = pack $ takeBaseName fp
   instanceSetupData <- decodeEither' rawData
   pure $ InstanceSetup { name, instanceSetupData, rawInstanceSetupData = rawData }
+
+
+getUserInstanceSetups :: IO [InstanceSetup]
+getUserInstanceSetups = do
+  instanceSetupsDir <- getCloudyInstanceSetupsDir
+  files <- listDirectory instanceSetupsDir
+  print files
+  let yamlFiles = filter isYamlExt files
+  traverse yamlFileToInstanceSetup yamlFiles
+  where
+    isYamlExt :: FilePath -> Bool
+    isYamlExt fp = takeExtension fp == ".yaml" || takeExtension fp == ".yml"
+
+yamlFileToInstanceSetup :: FilePath -> IO InstanceSetup
+yamlFileToInstanceSetup rawInstanceSetupFp = do
+  rawInstanceSetupData <- ByteString.readFile rawInstanceSetupFp
+  case parseInstanceSetup rawInstanceSetupFp rawInstanceSetupData of
+    Left err -> error $ "Failed to decode " <> rawInstanceSetupFp <> " as instance-setup: " <> show err
+    Right instanceSetup -> pure instanceSetup

@@ -22,6 +22,8 @@ import Options.Applicative
   , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc, flag', flag )
 import Control.Applicative (Alternative(many), optional)
 import Options.Applicative.Help (vsep)
+import Cloudy.InstanceSetup (getUserInstanceSetups)
+import Cloudy.InstanceSetup.Types (InstanceSetup)
 
 data CliCmd
   = Aws AwsCliOpts
@@ -67,17 +69,19 @@ data Recursive = Recursive | NoRecursive
   deriving stock Show
 
 parseCliOpts :: IO CliCmd
-parseCliOpts = execParser cliCmdParserInfo
+parseCliOpts = do
+  userInstanceSetups <- getUserInstanceSetups
+  execParser (cliCmdParserInfo userInstanceSetups)
 
-cliCmdParserInfo :: ParserInfo CliCmd
-cliCmdParserInfo = info (cliCmdParser <**> helper)
+cliCmdParserInfo :: [InstanceSetup] -> ParserInfo CliCmd
+cliCmdParserInfo userInstanceSetups = info (cliCmdParser userInstanceSetups <**> helper)
   ( fullDesc <>
     -- progDesc "cloudy" <>
     header "cloudy - create, setup, and manage compute instances in various cloud environments"
   )
 
-cliCmdParser :: Parser CliCmd
-cliCmdParser = hsubparser subParsers <|> list
+cliCmdParser :: [InstanceSetup] -> Parser CliCmd
+cliCmdParser userInstanceSetups = hsubparser subParsers <|> list
   where
     subParsers =
       awsCommand <>
@@ -99,7 +103,7 @@ cliCmdParser = hsubparser subParsers <|> list
       command
         "scaleway"
         ( info
-            (fmap Scaleway scalewayCliOptsParser)
+            (Scaleway <$> scalewayCliOptsParser userInstanceSetups)
             (progDesc "Run Scaleway-specific commands")
         )
 

@@ -1,11 +1,15 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Cloudy.Cli.Scaleway where
 
-import Data.Text (Text)
-import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, switch, auto, footerDoc)
 import Cloudy.Cli.Utils (maybeOpt)
+import Cloudy.InstanceSetup (builtInInstanceSetups)
+import Cloudy.InstanceSetup.Types (InstanceSetup (..))
 import Control.Applicative (optional)
-import Options.Applicative.Help (vsep)
+import Data.Text (Text, unpack)
+import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, switch, auto, footerDoc)
+import Options.Applicative.Help (vsep, Doc)
+import Data.String (IsString(fromString))
 
 data ScalewayCliOpts
   = ScalewayCreate ScalewayCreateCliOpts
@@ -35,8 +39,8 @@ data ScalewayListImagesCliOpts = ScalewayListImagesCliOpts
   }
   deriving stock Show
 
-scalewayCliOptsParser :: Parser ScalewayCliOpts
-scalewayCliOptsParser = hsubparser subParsers
+scalewayCliOptsParser :: [InstanceSetup] -> Parser ScalewayCliOpts
+scalewayCliOptsParser userInstanceSetups = hsubparser subParsers
   where
     subParsers = createCommand <> listInstanceTypesCommand <> listImagesCommand
 
@@ -58,12 +62,12 @@ scalewayCliOptsParser = hsubparser subParsers
                     , "Default instance-setup scripts builtin to Cloudy:"
                     , ""
                     ] <>
-                    undefined <>
+                    fmap instanceSetupToDoc builtInInstanceSetups <>
                     [ ""
                     , "User-defined instance-setup scripts in ~/.config/cloudy/instance-setup/:"
                     , ""
                     ] <>
-                    undefined
+                    fmap instanceSetupToDoc userInstanceSetups
                   )
               )
             )
@@ -84,6 +88,10 @@ scalewayCliOptsParser = hsubparser subParsers
             (fmap ScalewayListImages scalewayListImagesCliOptsParser)
             (progDesc "List available images in Scaleway")
         )
+
+instanceSetupToDoc :: InstanceSetup -> Doc
+instanceSetupToDoc instanceSetup =
+  "    - " <> fromString (unpack instanceSetup.name)
 
 scalewayCreateCliOptsParser :: Parser ScalewayCreateCliOpts
 scalewayCreateCliOptsParser =
