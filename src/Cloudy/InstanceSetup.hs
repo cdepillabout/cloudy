@@ -17,7 +17,7 @@ import System.Directory (listDirectory)
 import System.FilePath (takeBaseName, takeExtension)
 
 rawBuiltInInstanceSetups :: [(FilePath, ByteString)]
-rawBuiltInInstanceSetups = $(embedDir "instance-setup/")
+rawBuiltInInstanceSetups = $(embedDir "instance-setups/")
 
 builtInInstanceSetups :: [InstanceSetup]
 builtInInstanceSetups =
