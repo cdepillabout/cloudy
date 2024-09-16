@@ -4,6 +4,8 @@ module Cloudy.Cmd.Scaleway.Create where
 
 import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType, getImageId)
+import Cloudy.InstanceSetup (findInstanceSetup)
+import Cloudy.InstanceSetup.Types (InstanceSetup (..))
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Db (newCloudyInstance, newScalewayInstance, withCloudyDb)
 import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi, IpId, unIpId, zoneToText, serversUserDataGetApi)
@@ -40,6 +42,7 @@ data ScalewayCreateSettings = ScalewayCreateSettings
   , instanceType :: Text
   , volumeSizeGb :: Int
   , imageId :: Text
+  , instanceSetup :: Maybe InstanceSetup
   }
 
 mkSettings :: LocalConfFileOpts -> ScalewayCreateCliOpts -> IO ScalewayCreateSettings
@@ -54,6 +57,7 @@ mkSettings localConfFileOpts cliOpts = do
       instanceType = getInstanceType maybeInstanceTypeFromConfFile cliOpts.instanceType
   let maybeImageIdFromConfFile = localConfFileOpts.scaleway >>= \scale -> scale.defaultImageId
       imageId = getImageId maybeImageIdFromConfFile cliOpts.imageId
+  instanceSetup <- getInstanceSetup cliOpts.instanceSetup
   pure
     ScalewayCreateSettings
       { secretKey
@@ -62,10 +66,24 @@ mkSettings localConfFileOpts cliOpts = do
       , instanceType
       , volumeSizeGb = cliOpts.volumeSizeGb
       , imageId
+      , instanceSetup
       }
   where
     getVal :: Maybe a -> String -> IO a
     getVal mayVal errMsg = maybe (error errMsg) pure mayVal
+
+    getInstanceSetup :: Maybe Text -> IO (Maybe InstanceSetup)
+    getInstanceSetup = \case
+      -- No instance setup specified as a CLI option.  Don't use one.
+      Nothing -> pure Nothing
+      Just instSetupName -> do
+        maybeInstSetup <- findInstanceSetup instSetupName
+        case maybeInstSetup of
+          -- Despite specifying an instance setup name as a CLI option, we
+          -- couldn't find a corresponding instance setup. Alert the user to this
+          -- problem.
+          Nothing -> error $ "Couldn't find instance setup: \"" <> unpack instSetupName <> "\""
+          Just instSetup -> pure $ Just instSetup
 
 runCreate :: LocalConfFileOpts -> ScalewayCreateCliOpts -> IO ()
 runCreate localConfFileOpts scalewayOpts = do
@@ -80,6 +98,7 @@ runCreate localConfFileOpts scalewayOpts = do
       conn
       currentTime
       cloudyInstanceId
+      settings.instanceSetup
       (zoneToText settings.zone)
       (unServerId scalewayServerId)
       (unIpId scalewayIpId)
@@ -136,19 +155,18 @@ createScalewayServer settings instanceName = do
       firstVol.id
       (VolumesReq $ "cloudy-" <> instanceName <> "-boot-block-volume")
   liftIO $ putStrLn $ "servers volumes resp: " <> show serversVolumesResp
-  let userData =
-        unlines
-          [ "#!/usr/bin/env bash"
-          , "echo 'hello' >> /whatwhat"
-          ]
-  NoContent <-
-    serversUserDataPatchApi
-      authReq
-      settings.zone
-      serversResp.id
-      (UserDataKey "cloud-init")
-      (UserData $ pack userData)
-  liftIO $ putStrLn "created user data"
+  case settings.instanceSetup of
+    -- No instanceSetup user data, do nothing.
+    Nothing -> pure ()
+    Just instanceSetup -> do
+      NoContent <-
+        serversUserDataPatchApi
+          authReq
+          settings.zone
+          serversResp.id
+          (UserDataKey "cloud-init")
+          (UserData instanceSetup.rawInstanceSetupData)
+      liftIO $ putStrLn "created user data"
   let act = ServersActionReq { action = "poweron" }
   task <- serversActionPostApi authReq settings.zone serversResp.id act
   liftIO $ print task

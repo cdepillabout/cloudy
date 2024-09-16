@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Cloudy.InstanceSetup where
@@ -11,8 +12,8 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import Data.FileEmbed (embedDir)
 import Data.Functor ((<&>))
-import Data.List (sort)
-import Data.Text (pack)
+import Data.List (sort, find)
+import Data.Text (pack, Text)
 import Data.Text.Encoding (decodeUtf8')
 import Data.Yaml (decodeEither', ParseException (OtherParseException))
 import System.Directory (listDirectory)
@@ -53,7 +54,6 @@ getUserInstanceSetups :: IO [InstanceSetup]
 getUserInstanceSetups = do
   instanceSetupsDir <- getCloudyInstanceSetupsDir
   files <- fmap (instanceSetupsDir </>) <$> listDirectory instanceSetupsDir
-  print files
   let yamlFiles = filter isYamlExt files
   traverse yamlFileToInstanceSetup yamlFiles
   where
@@ -66,3 +66,15 @@ yamlFileToInstanceSetup rawInstanceSetupFp = do
   case parseInstanceSetup rawInstanceSetupFp rawInstanceSetupData of
     Left err -> error $ "Failed to decode " <> rawInstanceSetupFp <> " as instance-setup: " <> show err
     Right instanceSetup -> pure instanceSetup
+
+-- | Find an 'InstanceSetup' from within the built-in and user-defined instance
+-- setups.
+findInstanceSetup ::
+  -- | Name of the 'InstanceSetup' to look for.
+  Text ->
+  IO (Maybe InstanceSetup)
+findInstanceSetup nameToFind = do
+  userInstanceSetups <- getUserInstanceSetups
+  let allInstanceSetups = userInstanceSetups <> builtInInstanceSetups
+      maybeInstanceSetup :: Maybe InstanceSetup = find (\instSetup -> instSetup.name == nameToFind) allInstanceSetups
+  pure maybeInstanceSetup

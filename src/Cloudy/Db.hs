@@ -7,21 +7,21 @@ import Cloudy.InstanceSetup.Types (InstanceSetup (..))
 import Cloudy.NameGen (instanceNameGen)
 import Cloudy.Path (getCloudyDbPath)
 import Control.Exception (Exception, throwIO)
-import Data.Aeson (eitherDecode)
+import Data.Aeson (eitherDecodeStrict, encode)
 import qualified Data.ByteString as ByteString
 import Data.Foldable (fold)
 import Data.Int (Int64)
 import Data.List (find)
 import Data.Maybe (listToMaybe, catMaybes)
 import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8)
+import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import Data.Time ( UTCTime, getCurrentTime )
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
 import Data.Traversable (for)
 import Data.Void (Void)
 import Database.SQLite.Simple (withConnection, Connection, execute_, Query, query_, FromRow (..), ToRow (..), execute, withTransaction, lastInsertRowId, query, Only (..), field)
 import Database.SQLite.Simple.FromField (FromField (..))
-import Database.SQLite.Simple.ToField (ToField)
+import Database.SQLite.Simple.ToField (ToField (..))
 
 createLocalDatabase :: Connection -> IO ()
 createLocalDatabase conn = do
@@ -150,10 +150,14 @@ newtype DbInstanceSetup = DbInstanceSetup { unDbInstanceSetup :: InstanceSetup }
 instance FromField DbInstanceSetup where
   fromField fld = do
     rawInstanceSetup :: Text <- fromField fld
-    let eitherInstanceSetup = eitherDecode $ ByteString.fromStrict $ encodeUtf8 rawInstanceSetup
+    let eitherInstanceSetup = eitherDecodeStrict $ encodeUtf8 rawInstanceSetup
     case eitherInstanceSetup of
       Left err -> fail $ "Failed to json decode instance_setup column as InstanceSetup: " <> err
       Right instanceSetup -> pure $ DbInstanceSetup instanceSetup
+
+instance ToField DbInstanceSetup where
+  toField (DbInstanceSetup instSetup) =
+    toField $ decodeUtf8 $ ByteString.toStrict $ encode instSetup
 
 data ScalewayInstance = ScalewayInstance
   { cloudyInstanceId :: CloudyInstanceId
@@ -263,6 +267,7 @@ newScalewayInstance ::
   Connection ->
   UTCTime ->
   CloudyInstanceId ->
+  Maybe InstanceSetup ->
   -- | Scaleway Zone
   Text ->
   -- | Scaleway Instance Id
@@ -272,14 +277,14 @@ newScalewayInstance ::
   -- | Scaleway IP Address
   Text ->
   IO ()
-newScalewayInstance conn creationTime cloudyInstanceId scalewayZone scalewayInstanceId scalewayIpId scalewayIpAddress =
+newScalewayInstance conn creationTime cloudyInstanceId instSetup scalewayZone scalewayInstanceId scalewayIpId scalewayIpAddress =
   withTransaction conn $ do
     execute
       conn
       "UPDATE cloudy_instance \
-      \SET created_at = ? \
+      \SET created_at = ?, instance_setup = ? \
       \WHERE id = ?"
-      (utcTimeToSqliteInt creationTime, cloudyInstanceId)
+      (utcTimeToSqliteInt creationTime, fmap DbInstanceSetup instSetup, cloudyInstanceId)
     execute
       conn
       "INSERT INTO scaleway_instance \
