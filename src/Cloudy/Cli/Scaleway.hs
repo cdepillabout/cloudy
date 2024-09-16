@@ -4,7 +4,7 @@ module Cloudy.Cli.Scaleway where
 
 import Cloudy.Cli.Utils (maybeOpt)
 import Cloudy.InstanceSetup (builtInInstanceSetups)
-import Cloudy.InstanceSetup.Types (InstanceSetup (..))
+import Cloudy.InstanceSetup.Types (InstanceSetup (..), InstanceSetupData (..))
 import Control.Applicative (optional)
 import Data.Text (Text, unpack)
 import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, switch, auto, footerDoc)
@@ -64,10 +64,12 @@ scalewayCliOptsParser userInstanceSetups = hsubparser subParsers
                     ] <>
                     fmap instanceSetupToDoc builtInInstanceSetups <>
                     [ ""
-                    , "User-defined instance-setup scripts in ~/.config/cloudy/instance-setup/:"
+                    , "User-defined instance-setup scripts in ~/.config/cloudy/instance-setups/:"
                     , ""
                     ] <>
-                    fmap instanceSetupToDoc userInstanceSetups
+                    case userInstanceSetups of
+                      [] -> ["(none exist)"]
+                      _ -> fmap instanceSetupToDoc userInstanceSetups
                   )
               )
             )
@@ -91,7 +93,7 @@ scalewayCliOptsParser userInstanceSetups = hsubparser subParsers
 
 instanceSetupToDoc :: InstanceSetup -> Doc
 instanceSetupToDoc instanceSetup =
-  "    - " <> fromString (unpack instanceSetup.name)
+  "    - " <> fromString (unpack instanceSetup.name) <> "  --  " <> fromString (unpack instanceSetup.instanceSetupData.shortDescription)
 
 scalewayCreateCliOptsParser :: Parser ScalewayCreateCliOpts
 scalewayCreateCliOptsParser =

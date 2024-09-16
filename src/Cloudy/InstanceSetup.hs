@@ -3,17 +3,18 @@
 module Cloudy.InstanceSetup where
 
 import Cloudy.InstanceSetup.Types ( InstanceSetup(..) )
+import Cloudy.Path (getCloudyInstanceSetupsDir)
 import Control.DeepSeq (force)
 import Control.FromSum (fromEither)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import Data.FileEmbed (embedDir)
+import Data.Functor ((<&>))
+import Data.List (sort)
 import Data.Text (pack)
 import Data.Yaml (decodeEither', ParseException)
-import System.FilePath (takeBaseName, takeExtension)
-import Data.Functor ((<&>))
-import Cloudy.Path (getCloudyInstanceSetupsDir)
 import System.Directory (listDirectory)
+import System.FilePath (takeBaseName, takeExtension)
 
 rawBuiltInInstanceSetups :: [(FilePath, ByteString)]
 rawBuiltInInstanceSetups = $(embedDir "instance-setup/")
@@ -27,7 +28,7 @@ builtInInstanceSetups =
   -- We also have tests that should catch problems with decoding these
   -- instance-setup files.
   force $
-    rawBuiltInInstanceSetups <&> \(fp, rawData) ->
+    sort rawBuiltInInstanceSetups <&> \(fp, rawData) ->
       fromEither
         (\err ->
             error $
