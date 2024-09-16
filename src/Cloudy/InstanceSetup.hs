@@ -14,7 +14,7 @@ import Data.List (sort)
 import Data.Text (pack)
 import Data.Yaml (decodeEither', ParseException)
 import System.Directory (listDirectory)
-import System.FilePath (takeBaseName, takeExtension)
+import System.FilePath (takeBaseName, takeExtension, (</>))
 
 rawBuiltInInstanceSetups :: [(FilePath, ByteString)]
 rawBuiltInInstanceSetups = $(embedDir "instance-setups/")
@@ -47,7 +47,7 @@ parseInstanceSetup fp rawData = do
 getUserInstanceSetups :: IO [InstanceSetup]
 getUserInstanceSetups = do
   instanceSetupsDir <- getCloudyInstanceSetupsDir
-  files <- listDirectory instanceSetupsDir
+  files <- fmap (instanceSetupsDir </>) <$> listDirectory instanceSetupsDir
   print files
   let yamlFiles = filter isYamlExt files
   traverse yamlFileToInstanceSetup yamlFiles
