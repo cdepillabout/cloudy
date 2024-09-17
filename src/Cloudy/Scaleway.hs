@@ -43,11 +43,15 @@ type family Paged verb ct resp where
     verb ct (Headers '[Header "x-total-count" Int] resp)
 
 data Zone = NL1 | NL2 | NL3
-  deriving (Eq, Show)
+  deriving (Bounded, Enum, Eq, Show)
+
 
 instance ToJSON Zone where toJSON = toJSON . zoneToText
 instance FromJSON Zone where
   parseJSON = withText "Zone" $ maybe (fail "Failed to parse Zone") pure . zoneFromText
+
+allScalewayZones :: [Zone]
+allScalewayZones = enumFromTo minBound maxBound
 
 zoneToText :: Zone -> Text
 zoneToText = \case

@@ -7,9 +7,10 @@ import Cloudy.InstanceSetup (builtInInstanceSetups)
 import Cloudy.InstanceSetup.Types (InstanceSetup (..), InstanceSetupData (..))
 import Control.Applicative (optional)
 import Data.Text (Text, unpack)
-import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, switch, auto, footerDoc)
+import Options.Applicative (Parser, command, info, progDesc, hsubparser, strOption, long, short, metavar, option, help, value, showDefault, maybeReader, switch, auto, footerDoc, completeWith)
 import Options.Applicative.Help (vsep, Doc)
 import Data.String (IsString(fromString))
+import Cloudy.Scaleway (allScalewayZones, zoneToText)
 
 data ScalewayCliOpts
   = ScalewayCreate ScalewayCreateCliOpts
@@ -48,7 +49,7 @@ scalewayCliOptsParser userInstanceSetups = hsubparser subParsers
       command
         "create"
         ( info
-            (fmap ScalewayCreate scalewayCreateCliOptsParser)
+            (ScalewayCreate <$> scalewayCreateCliOptsParser userInstanceSetups)
             ( progDesc "Create a new compute instance in Scaleway" <>
               (footerDoc . Just $
                 -- TODO: do this better
@@ -93,16 +94,17 @@ scalewayCliOptsParser userInstanceSetups = hsubparser subParsers
 
 instanceSetupToDoc :: InstanceSetup -> Doc
 instanceSetupToDoc instanceSetup =
-  "    - " <> fromString (unpack instanceSetup.name) <> "  --  " <> fromString (unpack instanceSetup.instanceSetupData.shortDescription)
+  "    - " <> fromString (unpack instanceSetup.name) <>
+  "  --  " <> fromString (unpack instanceSetup.instanceSetupData.shortDescription)
 
-scalewayCreateCliOptsParser :: Parser ScalewayCreateCliOpts
-scalewayCreateCliOptsParser =
+scalewayCreateCliOptsParser :: [InstanceSetup] -> Parser ScalewayCreateCliOpts
+scalewayCreateCliOptsParser userInstanceSetups =
   ScalewayCreateCliOpts
     <$> zoneParser
     <*> instanceTypeParser
     <*> volumeSizeGbParser
     <*> imageIdParser
-    <*> instanceSetupParser
+    <*> instanceSetupParser userInstanceSetups
 
 scalewayListInstanceTypesCliOptsParser :: Parser ScalewayListInstanceTypesCliOpts
 scalewayListInstanceTypesCliOptsParser = ScalewayListInstanceTypesCliOpts <$> zoneParser
@@ -123,7 +125,8 @@ zoneParser =
     strOption
     ( long "zone" <>
       short 'z' <>
-      metavar "ZONE"
+      metavar "ZONE" <>
+      completeWith (unpack . zoneToText <$> allScalewayZones)
     )
 
 instanceTypeParser :: Parser (Maybe Text)
@@ -146,7 +149,8 @@ archParser =
       metavar "ARCH" <>
       help "Architecture of image.  Possiblities: \"x86_64\", \"arm\", or \"arm64\"" <>
       value "x86_64" <>
-      showDefault
+      showDefault <>
+      completeWith ["x86_64", "arm", "arm64"]
     )
   where
     archReader :: String -> Maybe Text
@@ -197,12 +201,14 @@ imageIdParser =
       metavar "IMAGE_ID"
     )
 
-instanceSetupParser :: Parser (Maybe Text)
-instanceSetupParser =
+instanceSetupParser :: [InstanceSetup] -> Parser (Maybe Text)
+instanceSetupParser userInstanceSetups =
   optional $
     strOption
       ( long "instance-setup" <>
         short 't' <>
         metavar "INSTANCE_SETUP" <>
-        help "Name of the instance-setup to use when booting the image.  (default: do no instance setup)"
+        help "Name of the instance-setup to use when booting the image.  (default: do no instance setup)" <>
+        completeWith
+          (fmap (\instSetup -> unpack instSetup.name) (userInstanceSetups <> builtInInstanceSetups))
       )
