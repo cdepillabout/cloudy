@@ -251,7 +251,8 @@ findAllCloudyInstances conn =
     conn
     "SELECT id, name, created_at, deleted_at, instance_setup \
     \FROM cloudy_instance \
-    \WHERE deleted_at IS NULL AND created_at IS NOT NULL"
+    \WHERE deleted_at IS NULL AND created_at IS NOT NULL \
+    \ORDER BY id"
 
 setCloudyInstanceDeleted :: Connection -> CloudyInstanceId -> IO ()
 setCloudyInstanceDeleted conn cloudyInstanceId = do

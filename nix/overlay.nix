@@ -61,7 +61,19 @@ final: prev: {
 
   cloudy = final.cloudy-haskell-pkg-set.cloudy;
 
-  cloudy-just-exe = final.haskell.lib.justStaticExecutables final.cloudy-haskell-pkg-set.cloudy;
+  cloudy-just-exe =
+    final.lib.pipe
+      final.cloudy
+      [
+        ( final.haskell.lib.compose.overrideCabal (oldAttrs: {
+            postInstall = ''
+                export HOME=$TMPDIR
+              '' + (oldAttrs.postInstall or "");
+          })
+        )
+        (final.cloudy-haskell-pkg-set.generateOptparseApplicativeCompletions ["cloudy"])
+        final.haskell.lib.justStaticExecutables
+      ];
 
   cloudy-shell = final.cloudy-haskell-pkg-set.shellFor {
     packages = hpkgs: [ hpkgs.cloudy ];

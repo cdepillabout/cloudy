@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Cloudy.Cli
   ( parseCliOpts
@@ -15,15 +16,16 @@ module Cloudy.Cli
 
 import Cloudy.Cli.Aws (AwsCliOpts(..), awsCliOptsParser)
 import Cloudy.Cli.Scaleway (ScalewayCliOpts(..), scalewayCliOptsParser)
-import Cloudy.Db (CloudyInstanceId (..))
-import Data.Text (Text)
-import Options.Applicative
-  ( Alternative((<|>)), Parser, (<**>), command, fullDesc, header, info
-  , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc, flag', flag )
-import Control.Applicative (Alternative(many), optional)
-import Options.Applicative.Help (vsep)
+import Cloudy.Db (CloudyInstanceId (..), CloudyInstance (..), withCloudyDb, findAllCloudyInstances)
 import Cloudy.InstanceSetup (getUserInstanceSetups)
 import Cloudy.InstanceSetup.Types (InstanceSetup)
+import Control.Applicative (Alternative(many), optional)
+import Data.Int (Int64)
+import Data.Text (Text, unpack)
+import Options.Applicative
+  ( Alternative((<|>)), Parser, (<**>), command, fullDesc, header, info
+  , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc, flag', flag, completeWith )
+import Options.Applicative.Help (vsep)
 
 data CliCmd
   = Aws AwsCliOpts
@@ -71,17 +73,18 @@ data Recursive = Recursive | NoRecursive
 parseCliOpts :: IO CliCmd
 parseCliOpts = do
   userInstanceSetups <- getUserInstanceSetups
-  execParser (cliCmdParserInfo userInstanceSetups)
+  activeCloudyInstances <- withCloudyDb findAllCloudyInstances
+  execParser (cliCmdParserInfo activeCloudyInstances userInstanceSetups)
 
-cliCmdParserInfo :: [InstanceSetup] -> ParserInfo CliCmd
-cliCmdParserInfo userInstanceSetups = info (cliCmdParser userInstanceSetups <**> helper)
+cliCmdParserInfo :: [CloudyInstance] -> [InstanceSetup] -> ParserInfo CliCmd
+cliCmdParserInfo activeCloudyInstances userInstanceSetups = info (cliCmdParser activeCloudyInstances userInstanceSetups <**> helper)
   ( fullDesc <>
     -- progDesc "cloudy" <>
     header "cloudy - create, setup, and manage compute instances in various cloud environments"
   )
 
-cliCmdParser :: [InstanceSetup] -> Parser CliCmd
-cliCmdParser userInstanceSetups = hsubparser subParsers <|> list
+cliCmdParser :: [CloudyInstance] -> [InstanceSetup] -> Parser CliCmd
+cliCmdParser activeCloudyInstances userInstanceSetups = hsubparser subParsers <|> list
   where
     subParsers =
       awsCommand <>
@@ -119,7 +122,7 @@ cliCmdParser userInstanceSetups = hsubparser subParsers <|> list
       command
         "ssh"
         ( info
-            (fmap Ssh sshCliOptsParser)
+            (Ssh <$> sshCliOptsParser activeCloudyInstances)
             ( progDesc "SSH to currently running compute instances" <>
               noIntersperse <>
               (footerDoc . Just $
@@ -162,7 +165,7 @@ cliCmdParser userInstanceSetups = hsubparser subParsers <|> list
       command
         "copy-file"
         ( info
-            (fmap CopyFile copyFileCliOptsParser)
+            (CopyFile <$> copyFileCliOptsParser activeCloudyInstances)
             ( progDesc "Copy files to/from currently running compute instances" <>
               forwardOptions <>
               (footerDoc . Just $
@@ -202,7 +205,7 @@ cliCmdParser userInstanceSetups = hsubparser subParsers <|> list
       command
         "destroy"
         ( info
-            (fmap Destroy destroyCliOptsParser)
+            (Destroy <$> destroyCliOptsParser activeCloudyInstances)
             ( progDesc "Destroy currently running compute instance" <>
               footer
                 "If neither a CLOUDY_INSTANCE_ID nor a CLOUDY_INSTANCE_NAME is \
@@ -219,48 +222,52 @@ cliCmdParser userInstanceSetups = hsubparser subParsers <|> list
 listCliOptsParser :: Parser ListCliOpts
 listCliOptsParser = pure ListCliOpts
 
-sshCliOptsParser :: Parser SshCliOpts
-sshCliOptsParser =
+sshCliOptsParser :: [CloudyInstance] -> Parser SshCliOpts
+sshCliOptsParser activeCloudyInstances =
   SshCliOpts
-    <$> cloudyInstanceIdParser
-    <*> cloudyInstanceNameParser
+    <$> cloudyInstanceIdParser activeCloudyInstances
+    <*> cloudyInstanceNameParser activeCloudyInstances
     <*> passthruArgs
 
-copyFileCliOptsParser :: Parser CopyFileCliOpts
-copyFileCliOptsParser =
+copyFileCliOptsParser :: [CloudyInstance] -> Parser CopyFileCliOpts
+copyFileCliOptsParser activeCloudyInstances =
   CopyFileCliOpts
-    <$> cloudyInstanceIdParser
-    <*> cloudyInstanceNameParser
+    <$> cloudyInstanceIdParser activeCloudyInstances
+    <*> cloudyInstanceNameParser activeCloudyInstances
     <*> directionParser
     <*> recursiveParser
     <*> copyFilesParser
 
-destroyCliOptsParser :: Parser DestroyCliOpts
-destroyCliOptsParser =
+destroyCliOptsParser :: [CloudyInstance] -> Parser DestroyCliOpts
+destroyCliOptsParser activeCloudyInstances =
   DestroyCliOpts
-    <$> cloudyInstanceIdParser
-    <*> cloudyInstanceNameParser
+    <$> cloudyInstanceIdParser activeCloudyInstances
+    <*> cloudyInstanceNameParser activeCloudyInstances
 
-cloudyInstanceIdParser :: Parser (Maybe CloudyInstanceId)
-cloudyInstanceIdParser = fmap (Just . CloudyInstanceId) innerParser <|> pure Nothing
+cloudyInstanceIdParser :: [CloudyInstance] -> Parser (Maybe CloudyInstanceId)
+cloudyInstanceIdParser activeCloudyInstances = fmap CloudyInstanceId <$> innerParser
   where
+    innerParser :: Parser (Maybe Int64)
     innerParser =
-      option
-        auto
-        ( long "id" <>
-          short 'i' <>
-          metavar "CLOUDY_INSTANCE_ID" <>
-          help "Cloudy instance ID to operate on."
-        )
+      optional $
+        option
+          auto
+          ( long "id" <>
+            short 'i' <>
+            metavar "CLOUDY_INSTANCE_ID" <>
+            help "Cloudy instance ID to operate on." <>
+            completeWith (fmap (\inst -> show $ unCloudyInstanceId inst.id) activeCloudyInstances)
+          )
 
-cloudyInstanceNameParser :: Parser (Maybe Text)
-cloudyInstanceNameParser =
+cloudyInstanceNameParser :: [CloudyInstance] -> Parser (Maybe Text)
+cloudyInstanceNameParser activeCloudyInstances =
   optional $
     strOption
       ( long "name" <>
         short 'n' <>
         metavar "CLOUDY_INSTANCE_NAME" <>
-        help "Cloudy instance name to operate on."
+        help "Cloudy instance name to operate on." <>
+        completeWith (fmap (\inst -> unpack inst.name) activeCloudyInstances)
       )
 
 -- | Parser for arguments that are not really parsed, just passed through.
