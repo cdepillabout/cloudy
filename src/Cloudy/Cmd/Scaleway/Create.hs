@@ -5,7 +5,7 @@ module Cloudy.Cmd.Scaleway.Create where
 import Cloudy.Cli.Scaleway (ScalewayCreateCliOpts (..))
 import Cloudy.Cmd.Scaleway.Utils (createAuthReq, getZone, runScalewayClientM, getInstanceType, getImageId)
 import Cloudy.InstanceSetup (findInstanceSetup)
-import Cloudy.InstanceSetup.Types (InstanceSetup (..))
+import Cloudy.InstanceSetup.Types (InstanceSetup (..), InstanceSetupData (..))
 import Cloudy.LocalConfFile (LocalConfFileOpts (..), LocalConfFileScalewayOpts (..))
 import Cloudy.Db (newCloudyInstance, newScalewayInstance, withCloudyDb)
 import Cloudy.Scaleway (ipsPostApi, Zone (..), IpsReq (..), IpsResp (..), ProjectId (..), serversPostApi, ServersReq (..), ServersResp (..), ImageId (ImageId), serversUserDataPatchApi, UserDataKey (UserDataKey), UserData (UserData), ServersActionReq (..), serversActionPostApi, ServersRespVolume (..), ServersReqVolume (..), VolumesReq (..), volumesPatchApi, ServerId, unServerId, serversGetApi, IpId, unIpId, zoneToText, serversUserDataGetApi)
@@ -165,7 +165,7 @@ createScalewayServer settings instanceName = do
           settings.zone
           serversResp.id
           (UserDataKey "cloud-init")
-          (UserData instanceSetup.rawInstanceSetupData)
+          (UserData instanceSetup.instanceSetupData.cloudInitUserData)
       liftIO $ putStrLn "created user data"
   let act = ServersActionReq { action = "poweron" }
   task <- serversActionPostApi authReq settings.zone serversResp.id act
