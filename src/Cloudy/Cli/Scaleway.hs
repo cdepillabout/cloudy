@@ -133,7 +133,7 @@ instanceTypeParser :: Parser (Maybe Text)
 instanceTypeParser =
   maybeOpt
     "Scaleway instance type (use `cloudy scaleway list-instance-types` command to get list of all instance types)"
-    "VC1M"
+    "PLAY2-NANO"
     strOption
     ( long "instance-type" <>
       short 'c' <>

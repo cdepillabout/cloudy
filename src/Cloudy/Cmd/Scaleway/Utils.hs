@@ -55,7 +55,7 @@ getMaybeOrDefault :: Foldable t => a -> t (Maybe a) -> a
 getMaybeOrDefault defVal maybes = fromMaybe defVal (asum maybes)
 
 defaultInstanceType :: Text
-defaultInstanceType = "VC1M"
+defaultInstanceType = "PLAY2-NANO"
 
 getInstanceType :: Maybe Text -> Maybe Text -> Text
 getInstanceType maybeInstanceTypeFromConfFile maybeInstanceTypeFromCliOpts =
