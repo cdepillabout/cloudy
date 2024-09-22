@@ -88,11 +88,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@v27
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
-      - uses: DeterminateSystems/magic-nix-cache-action@v2
+      - uses: DeterminateSystems/magic-nix-cache-action@v8
 
       - run: nix-build
 

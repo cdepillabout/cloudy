@@ -1,47 +1,51 @@
-final: prev: {
+final: prev:
 
+let
+  mkCloudy = final: hfinal:
+    let
+      filesToIgnore = [
+        ".git"
+        ".github"
+        ".stack-work"
+        ".travis.yml"
+        "cabal.project"
+        "default.nix"
+        "flake.lock"
+        "flake.nix"
+        "nix"
+        "result"
+        "shell.nix"
+        "stack-nightly.yaml"
+        "stack.yaml"
+      ];
+
+      src =
+        builtins.path {
+          name = "cloudy-src";
+          path = ./..;
+          filter = path: type:
+            with final.lib;
+            ! elem (baseNameOf path) filesToIgnore &&
+            ! any (flip hasPrefix (baseNameOf path)) [ "dist" ".ghc" ];
+        };
+
+      extraCabal2nixOptions = "";
+    in
+    hfinal.callCabal2nixWithOptions "cloudy" src extraCabal2nixOptions {};
+in
+{
   ###############################
   ## Haskell package overrides ##
   ###############################
 
-  myhaskell =
+  cloudy-haskell =
     let
       myHaskellOverride = oldAttrs: {
         overrides =
           final.lib.composeExtensions
             (oldAttrs.overrides or (_: _: {}))
             (hfinal: hprev: {
-              cloudy =
-                let
-                  filesToIgnore = [
-                    ".git"
-                    ".github"
-                    ".stack-work"
-                    ".travis.yml"
-                    "cabal.project"
-                    "default.nix"
-                    "flake.lock"
-                    "flake.nix"
-                    "nix"
-                    "result"
-                    "shell.nix"
-                    "stack-nightly.yaml"
-                    "stack.yaml"
-                  ];
-
-                  src =
-                    builtins.path {
-                      name = "cloudy-src";
-                      path = ./..;
-                      filter = path: type:
-                        with final.lib;
-                        ! elem (baseNameOf path) filesToIgnore &&
-                        ! any (flip hasPrefix (baseNameOf path)) [ "dist" ".ghc" ];
-                    };
-
-                  extraCabal2nixOptions = "";
-                in
-                hfinal.callCabal2nixWithOptions "cloudy" src extraCabal2nixOptions {};
+              cloudy = mkCloudy final hfinal;
             });
       };
     in
@@ -50,6 +54,16 @@ final: prev: {
         ${final.cloudy-ghc-version} =
           prev.haskell.packages.${final.cloudy-ghc-version}.override
             myHaskellOverride;
+
+        ${final.cloudy-static-ghc-version} =
+          prev.haskell.packages.${final.cloudy-static-ghc-version}.override
+            myHaskellOverride;
+
+        native-bignum = prev.haskell.packages.native-bignum // {
+          ${final.cloudy-static-ghc-version} =
+            prev.haskell.packages.native-bignum.${final.cloudy-static-ghc-version}.override
+              myHaskellOverride;
+        };
       };
     };
 
@@ -57,7 +71,7 @@ final: prev: {
 
   cloudy-ghc-version = "ghc" + final.cloudy-ghc-version-short;
 
-  cloudy-haskell-pkg-set = final.myhaskell.packages.${final.cloudy-ghc-version};
+  cloudy-haskell-pkg-set = final.cloudy-haskell.packages.${final.cloudy-ghc-version};
 
   cloudy = final.cloudy-haskell-pkg-set.cloudy;
 
@@ -101,5 +115,32 @@ final: prev: {
       export NIX_GHC_LIBDIR="${final.cloudy-shell.NIX_GHC_LIBDIR}"
     '';
   };
+
+  ##############################
+  ## Statically-linked builds ##
+  ##############################
+
+  cloudy-static-ghc-version-short = "948";
+  # cloudy-static-ghc-version-short = "982";
+
+  cloudy-static-ghc-version = "ghc" + final.cloudy-static-ghc-version-short;
+
+  cloudy-static-haskell-pkg-set = final.pkgsStatic.cloudy-haskell.packages.native-bignum.${final.cloudy-static-ghc-version};
+
+  cloudy-static = final.cloudy-static-haskell-pkg-set.cloudy;
+
+  cloudy-static-just-exe =
+    final.lib.pipe
+      final.cloudy-static
+      [
+        ( final.haskell.lib.compose.overrideCabal (oldAttrs: {
+            postInstall = ''
+                export HOME=$TMPDIR
+              '' + (oldAttrs.postInstall or "");
+          })
+        )
+        (final.cloudy-static-haskell-pkg-set.generateOptparseApplicativeCompletions ["cloudy"])
+        final.haskell.lib.justStaticExecutables
+      ];
 }
 

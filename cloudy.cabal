@@ -14,7 +14,7 @@ category:            Productivity
 build-type:          Custom
 extra-source-files:  README.md
                    , default.nix
-                   , instance-setup/*.yaml
+                   , instance-setups/*.yaml
                    , nix/default.nix
                    , nix/overlay.nix
                    , shell.nix
@@ -24,10 +24,12 @@ custom-setup
                    -- upper bound on your setup-depends. But I don't want to
                    -- have to remember to bump the upper bound of each of these
                    -- setup depends every time I want to make a release of cloudy,
-                   -- especially sense I already have upper bounds on important things
-                   -- like base below.
+                   -- especially since I already have upper bounds on important things
+                   -- like base below.  I'm never going to want my bounds on setup-depends
+                   -- to differ from the bounds on my actual depends.
   setup-depends:     base <999
                    , cabal-doctest >=1.0.2 && <1.1
+                   , Cabal >= 3.8
 
 library
   hs-source-dirs:      src
@@ -56,7 +58,7 @@ library
                        Cloudy.Path
                        Cloudy.Scaleway
                        Cloudy.Table
-  build-depends:       base
+  build-depends:       base >= 4.17
                      , aeson
                      , bytestring
                      , containers
