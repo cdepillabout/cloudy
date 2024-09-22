@@ -1,15 +1,13 @@
 module Cloudy.Cmd.Scaleway.Utils where
 
 import Cloudy.Scaleway (Zone (..), zoneFromText, PageNum (PageNum))
-import Data.Foldable1 (foldl1')
-import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Foldable (asum, foldl')
+import Data.Maybe (fromMaybe)
 import Data.Text (Text, unpack)
+import Network.HTTP.Client.TLS (newTlsManager)
 import Servant.API (AuthProtect, Headers (Headers), Header, HList (..), ResponseHeader (Header))
 import Servant.Client (BaseUrl (BaseUrl), Scheme (Https), ClientM, ClientError, mkClientEnv, runClientM)
 import Servant.Client.Core (mkAuthenticatedRequest, AuthenticatedRequest, AuthClientData, Request, addHeader)
-import Network.HTTP.Client.TLS (newTlsManager)
-import Data.Foldable (asum)
-import Data.Maybe (fromMaybe)
 
 createAuthReq :: Text -> AuthenticatedRequest (AuthProtect "auth-token")
 createAuthReq secretKey = mkAuthenticatedRequest secretKey createAuthTokenHeader
@@ -102,7 +100,7 @@ fetchPagedApi fetchPage combineResults countResultsOnPage = do
                 pure $ Just (pageRes, (newTotal, nextPageNum))
           )
           (page1Count, 2)
-      pure $ foldl1' combineResults (page1Res :| allRes)
+      pure $ foldl' combineResults page1Res allRes
 
 unfoldM :: Monad m => (s -> m (Maybe (a, s))) -> s -> m [a]
 unfoldM f s = do
