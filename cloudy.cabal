@@ -14,7 +14,7 @@ category:            Productivity
 build-type:          Custom
 extra-source-files:  README.md
                    , default.nix
-                   , instance-setup/*.yaml
+                   , instance-setups/*.yaml
                    , nix/default.nix
                    , nix/overlay.nix
                    , shell.nix
@@ -28,6 +28,7 @@ custom-setup
                    -- like base below.
   setup-depends:     base <999
                    , cabal-doctest >=1.0.2 && <1.1
+                   , Cabal >= 3.8
 
 library
   hs-source-dirs:      src
@@ -56,7 +57,7 @@ library
                        Cloudy.Path
                        Cloudy.Scaleway
                        Cloudy.Table
-  build-depends:       base
+  build-depends:       base >= 4.17
                      , aeson
                      , bytestring
                      , containers
