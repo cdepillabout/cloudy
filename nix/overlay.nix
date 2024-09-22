@@ -121,10 +121,11 @@ in
   ##############################
 
   cloudy-static-ghc-version-short = "948";
+  # cloudy-static-ghc-version-short = "982";
 
   cloudy-static-ghc-version = "ghc" + final.cloudy-static-ghc-version-short;
 
-  cloudy-static-haskell-pkg-set = final.cloudy-haskell.packages.native-bignum.${final.cloudy-static-ghc-version};
+  cloudy-static-haskell-pkg-set = final.pkgsStatic.cloudy-haskell.packages.native-bignum.${final.cloudy-static-ghc-version};
 
   cloudy-static = final.cloudy-static-haskell-pkg-set.cloudy;
 
