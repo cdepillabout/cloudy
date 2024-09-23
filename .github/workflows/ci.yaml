@@ -5,6 +5,12 @@ on:
   pull_request:
   push:
     branches: [master]
+    # tags: ['v*']  # Run on tag creation for new releases
+  release:
+    types: [ "published" ]
+
+env:
+  CI_RELEASE: "${{ github.event_name == 'release' }}"
 
 jobs:
   cabal:
@@ -111,3 +117,12 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@v8
 
       - run: nix-build ./nix -A cloudy-static-just-exe
+
+      - name: "(Release only) Publish statically-linked Linux x86_64 binary"
+        if: "${{ env.CI_RELEASE == 'true' }}"
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          static_bin="cloudy-static-linux-x86_64"
+          cp ./result/bin/cloudy "${static_bin}"
+          gh release upload --clobber "${{ github.ref_name }}" "${static_bin}"
