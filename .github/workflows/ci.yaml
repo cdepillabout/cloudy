@@ -1,6 +1,5 @@
 name: cloudy build and test
 
-# Trigger the workflow on push or pull request, but only for the master branch
 on:
   pull_request:
   push:
@@ -11,6 +10,14 @@ on:
 
 env:
   CI_RELEASE: "${{ github.event_name == 'release' }}"
+
+# TODO: The cabal and stack actions currently don't cache built deps at all
+# (even though the current code was working perfectly well in
+# haskell/actions...)
+#
+# See the following for more info:
+# - https://github.com/haskell-actions/setup#model-cabal-workflow-with-caching
+# - https://github.com/haskell-actions/setup/issues/86
 
 jobs:
   cabal:
