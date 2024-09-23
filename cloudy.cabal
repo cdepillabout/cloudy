@@ -13,6 +13,7 @@ copyright:           2024-2024 Dennis Gosnell
 category:            Productivity
 build-type:          Custom
 extra-source-files:  README.md
+                   , CHANGELOG.md
                    , default.nix
                    , instance-setups/*.yaml
                    , nix/default.nix
@@ -58,6 +59,8 @@ library
                        Cloudy.Path
                        Cloudy.Scaleway
                        Cloudy.Table
+  other-modules:       Paths_cloudy
+  autogen-modules:     Paths_cloudy
   build-depends:       base >= 4.17
                      , aeson
                      , bytestring

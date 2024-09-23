@@ -55,10 +55,6 @@ in
           prev.haskell.packages.${final.cloudy-ghc-version}.override
             myHaskellOverride;
 
-        ${final.cloudy-static-ghc-version} =
-          prev.haskell.packages.${final.cloudy-static-ghc-version}.override
-            myHaskellOverride;
-
         native-bignum = prev.haskell.packages.native-bignum // {
           ${final.cloudy-static-ghc-version} =
             prev.haskell.packages.native-bignum.${final.cloudy-static-ghc-version}.override
@@ -120,8 +116,8 @@ in
   ## Statically-linked builds ##
   ##############################
 
+  # Static builds only work on ghc94, not ghc96+ :-(
   cloudy-static-ghc-version-short = "948";
-  # cloudy-static-ghc-version-short = "982";
 
   cloudy-static-ghc-version = "ghc" + final.cloudy-static-ghc-version-short;
 

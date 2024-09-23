@@ -22,10 +22,12 @@ import Cloudy.InstanceSetup.Types (InstanceSetup)
 import Control.Applicative (Alternative(many), optional)
 import Data.Int (Int64)
 import Data.Text (Text, unpack)
+import Data.Version (showVersion)
 import Options.Applicative
   ( Alternative((<|>)), Parser, (<**>), command, fullDesc, header, info
-  , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc, flag', flag, completeWith )
+  , progDesc, execParser, helper, footer, hsubparser, ParserInfo, strOption, long, short, metavar, help, option, auto, noIntersperse, forwardOptions, strArgument, footerDoc, flag', flag, completeWith, simpleVersioner )
 import Options.Applicative.Help (vsep)
+import Paths_cloudy (version)
 
 data CliCmd
   = Aws AwsCliOpts
@@ -77,11 +79,16 @@ parseCliOpts = do
   execParser (cliCmdParserInfo activeCloudyInstances userInstanceSetups)
 
 cliCmdParserInfo :: [CloudyInstance] -> [InstanceSetup] -> ParserInfo CliCmd
-cliCmdParserInfo activeCloudyInstances userInstanceSetups = info (cliCmdParser activeCloudyInstances userInstanceSetups <**> helper)
-  ( fullDesc <>
-    -- progDesc "cloudy" <>
-    header "cloudy - create, setup, and manage compute instances in various cloud environments"
-  )
+cliCmdParserInfo activeCloudyInstances userInstanceSetups =
+  info
+    ( cliCmdParser activeCloudyInstances userInstanceSetups <**>
+      helper <**>
+      simpleVersioner (showVersion version)
+    )
+    ( fullDesc <>
+      -- progDesc "cloudy" <>
+      header "cloudy - create, setup, and manage compute instances in various cloud environments"
+    )
 
 cliCmdParser :: [CloudyInstance] -> [InstanceSetup] -> Parser CliCmd
 cliCmdParser activeCloudyInstances userInstanceSetups = hsubparser subParsers <|> list

@@ -57,7 +57,7 @@ This section lists installation instructions for various distros.
 
 ### Generic Linux
 
-There is a statically-linked Linux ELF binary for `cloudy` available on each of
+There is a statically-linked x86_64 Linux ELF binary for `cloudy` available on each of
 the [GitHub Releases](https://github.com/cdepillabout/cloudy/releases).
 
 ### Nix / NixOS
@@ -191,17 +191,72 @@ See `cloudy scaleway create --help` for more information.
 
 ### List all Cloud Instances
 
+You can see all your active Cloud Instances with the `cloudy list` command:
 
+```console
+$ cloudy list
+|---------------------------------------------------------------------------------------------------------|
+| instance id | instance name  |   created date   |  cloud   |   zone   |       ip       | instance setup |
+|=============|================|==================|==========|==========|================|================|
+|           7 | belief-example | 2024-09-22 18:23 | scaleway | nl-ams-1 | 61.252.131.123 | nginx          |
+|          10 | land-secretary | 2024-09-22 18:24 | scaleway | fr-par-3 | 73.128.200.201 | (none)         |
+|---------------------------------------------------------------------------------------------------------|
+```
 
 ### SSH to Cloud Instance
 
+You can SSH to an instance with the `cloudy ssh` command:
+
+```console
+$ cloudy ssh --name belief-example
+```
+
+You can pick which instance to SSH to with either the `--name` or `--id`
+argument. If you have only a single instance available, then you don't need to
+specify either the `--name` or `--id` argument.
+
 ### Copy Files to/from Cloud Instance
+
+You can copy files to an instance with a command like the following:
+
+```console
+$ cloudy copy-file --to-instance ./my-local-file my-remote-file
+```
+
+This copies the local file `my-local-file` to the cloud instance with the name
+`my-remote-file`.
+
+See `cloudy copy-file --help` for more examples of copying files.
 
 ### Destroy Cloud Instance
 
+You can destroy a cloud instance with a command like the following:
+
+```console
+$ cloudy destroy --name belief-example
+```
+
+You can pick which instance to SSH to with either the `--name` or `--id`
+argument. If you have only a single instance available, then you don't need to
+specify either the `--name` or `--id` argument.
+
+After destroying the instance, you likely want to double check the cloud
+provider's management UI to confirm that all the related resources have been
+deleted.
+
 ## Instance Setup Scripts
 
+TODO
+
 ## Moving Past Cloudy
+
+Cloudy is meant to be simple and easy to use from the command line.  If you
+want to change many additional settings when creating an instance, or you want
+to create multiple instances at once, you likely want a more flexible solution
+than Cloudy.
+
+I recommend you look into either directly calling the CLI tool for a given
+cloud provider, or using a tool like Terraform to create cloud resources.
 
 ## WARNING
 
