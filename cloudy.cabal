@@ -1,7 +1,7 @@
 cabal-version:       3.4
 
 name:                cloudy
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            CLI tool to easily spin up and control compute instances in various cloud environments
 -- description:         CLI tool
 homepage:            https://github.com/cdepillabout/cloudy
