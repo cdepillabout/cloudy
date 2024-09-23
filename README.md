@@ -57,7 +57,7 @@ This section lists installation instructions for various distros.
 
 ### Generic Linux
 
-There is a statically-linked Linux ELF binary for `cloudy` available on each of
+There is a statically-linked x86_64 Linux ELF binary for `cloudy` available on each of
 the [GitHub Releases](https://github.com/cdepillabout/cloudy/releases).
 
 ### Nix / NixOS
