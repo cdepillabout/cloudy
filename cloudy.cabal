@@ -59,6 +59,8 @@ library
                        Cloudy.Path
                        Cloudy.Scaleway
                        Cloudy.Table
+  other-modules:       Paths_cloudy
+  autogen-modules:     Paths_cloudy
   build-depends:       base >= 4.17
                      , aeson
                      , bytestring
