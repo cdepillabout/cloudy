@@ -30,7 +30,7 @@ custom-setup
                    -- to differ from the bounds on my actual depends.
   setup-depends:     base <999
                    , cabal-doctest >=1.0.2 && <1.1
-                   , Cabal >= 3.8
+                   , Cabal >= 3.8 && < 9999
 
 library
   hs-source-dirs:      src
@@ -61,7 +61,7 @@ library
                        Cloudy.Table
   other-modules:       Paths_cloudy
   autogen-modules:     Paths_cloudy
-  build-depends:       base >= 4.17
+  build-depends:       base >= 4.17 && < 9999
                      , aeson
                      , bytestring
                      , containers
