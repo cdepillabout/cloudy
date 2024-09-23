@@ -6,3 +6,6 @@ packages:
 nix:
   packages:
     - zlib
+  # The local Nixpkgs checkout will definitely have the GHC versions that stack needs
+  path:
+    - "nixpkgs=./nix"
