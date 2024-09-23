@@ -106,7 +106,13 @@ jobs:
 
   nix-static:
     name: nix static / ubuntu-latest
+
+    permissions:
+      # This is required for this job to be able to upload release assets.
+      contents: write
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
 
