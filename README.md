@@ -258,6 +258,19 @@ than Cloudy.
 I recommend you look into either directly calling the CLI tool for a given
 cloud provider, or using a tool like Terraform to create cloud resources.
 
+## Versioning
+
+Cloudy is versioned according to the [Haskell PVP](https://pvp.haskell.org/).
+
+The Haskell PVP is very close to [Semver](https://semver.org/), except there is
+an extra MAJOR version component.
+
+For instance, with a Cloudy version like `MAJOR.MAJOR.MINOR.PATCH` (`1.2.3.4`), you can think of it
+being similar to a Semver like `MAJOR.MINOR.PATCH` (`12.3.4`).
+
+In the Haskell PVP, the leftmost `MAJOR` version number is only bumped to show
+a _significant_ change in functionality, stableness, or usability.
+
 ## WARNING
 
 Cloudy is still beta software.  It is possible that cloud resources are not
