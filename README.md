@@ -271,6 +271,30 @@ being similar to a Semver like `MAJOR.MINOR.PATCH` (`12.3.4`).
 In the Haskell PVP, the leftmost `MAJOR` version number is only bumped to show
 a _significant_ change in functionality, stableness, or usability.
 
+## Releasing
+
+Here are the steps to release a new version of Cloudy:
+
+1.  Send and merge a PR bumping the version number according to the Haskell
+    PVP, as well as adding a new [`CHANGELOG.md`](./CHANGELOG.md) entry.
+
+2.  Go to the GitHub [Releases](https://github.com/cdepillabout/cloudy/releases)
+    page and click "Draft a new release".
+
+3.  In the "Choose a tag" drop-down, create a new tag with the format
+    `v1.2.3.4` with the newly-bumped version number.  Use this same tag as the title.
+    Copy and paste the new CHANGELOG entries to the release notes.
+    Click "Publish release".
+
+    This also creates a new Git tag, which you can fetch locally with a command like
+    `git fetch --tags`.
+
+4.  Upon publishing the release, a GitHub Action should run that builds and
+    uploads a statically-linked `cloudy` binary as a Release Asset.
+
+5.  Upload the new version of Cloudy to Hackage with a command like
+    `stack upload .`
+
 ## WARNING
 
 Cloudy is still beta software.  It is possible that cloud resources are not
