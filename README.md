@@ -322,7 +322,7 @@ cloud-init-user-data: |
   # Run these commands after bootup.
   runcmd:
     - |
-      cowsay "hello world from Cloudy!" > /tmp/hello-from-cloudy
+      /usr/games/cowsay "hello world from Cloudy!" > /hello-from-cloudy
 ```
 
 There are a few required keys within an Instance Setup script:
