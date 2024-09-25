@@ -246,7 +246,100 @@ deleted.
 
 ## Instance Setup Scripts
 
-TODO
+One of the nicest features of Cloudy is the ability to specify Instance Setup
+scripts. These are YAML files that contain cloud-init scripts to run when the
+instance boots up.  Here's an example of what a Cloudy Instance Setup script
+looks like:
+
+`hello-world.yaml`:
+
+```yaml
+short-description: A basic hello-world instance-setup that shows how to run a bash script.
+
+cloud-init-user-data: |
+  #!/usr/bin/env bash
+
+  echo "hello world from Cloudy!" > /tmp/hello-from-cloudy
+```
+
+The Bash code in `cloud-init-user-data` will be run when the instance first
+boots up.
+
+Cloudy provides some built-in Instance Setup scripts, as well as allowing the
+user to define their own private scripts.
+
+### Cloudy Built-in Instance Setup Scripts
+
+You can see which instance setup scripts are available by either looking in the
+[`instance-setups`](./instance-setups) directory in this repo, or looking at
+the output of the `cloudy PROVIDER create --help` command.
+
+For instance, with Scaleway:
+
+```console
+$ cloudy scaleway create --help
+...
+Available options:
+  -t,--instance-setup INSTANCE_SETUP
+                           Name of the instance-setup to use when booting the
+                           image. (default: do no instance setup)
+...
+Default instance-setup scripts builtin to Cloudy:
+
+    - hello-world  --  A basic hello-world instance-setup that shows how to run a bash script.
+    - hello-world-cloud-config  --  A basic hello-world instance-setup that shows how to run a cloud-config script.
+```
+
+You can see here that there are two instance-setup scripts available,
+`hello-world` and `hello-world-cloud-config`.
+
+You can specify an instance setup script when creating a new instance.  For
+instance, when creating a new instance on Scaleway:
+
+```console
+$ cloudy scaleway create --instance-setup hello-world
+```
+
+### Defining your own Instance Setup Script
+
+You can define your own private Instance Setup scripts.
+
+First, create a YAML file in `~/.config/cloudy/instance-setups/`.  Here's an
+example file:
+
+`foobar.yaml`:
+
+```yaml
+short-description: An example instance-setup script
+
+cloud-init-user-data: |
+  #cloud-config
+
+  # Install these packages using the default package manager of the instance.
+  packages:
+    - cowsay
+
+  # Run these commands after bootup.
+  runcmd:
+    - |
+      /usr/games/cowsay "hello world from Cloudy!" > /hello-from-cloudy
+```
+
+There are a few required keys within an Instance Setup script:
+
+- `short-description`: _[string]_ an explanation of what this instance-setup script does
+
+- `cloud-init-user-data`: _[string]_ a cloud-init compatible user-data file.
+
+    This is generally either a normal shell script that starts with a hash-bang line like
+    `#!/usr/bin/env bash`, or a cloud-config script that starts with `#cloud-config`.
+
+    See the [cloud-init documentation](https://cloudinit.readthedocs.io/en/latest/index.html),
+    for specifics on how cloud-init works.
+
+    You may be interested in the page on what cloud-init script
+    [formats are available](https://cloudinit.readthedocs.io/en/latest/explanation/format.html),
+    including normal shell scripts and cloud-config scripts.
 
 ## Moving Past Cloudy
 
@@ -257,6 +350,43 @@ than Cloudy.
 
 I recommend you look into either directly calling the CLI tool for a given
 cloud provider, or using a tool like Terraform to create cloud resources.
+
+## Versioning
+
+Cloudy is versioned according to the [Haskell PVP](https://pvp.haskell.org/).
+
+The Haskell PVP is very close to [Semver](https://semver.org/), except there is
+an extra MAJOR version component.
+
+For instance, with a Cloudy version like `MAJOR.MAJOR.MINOR.PATCH` (`1.2.3.4`), you can think of it
+being similar to a Semver like `MAJOR.MINOR.PATCH` (`12.3.4`).
+
+In the Haskell PVP, the leftmost `MAJOR` version number is only bumped to show
+a _significant_ change in functionality, stableness, or usability.
+
+## Releasing
+
+Here are the steps to release a new version of Cloudy:
+
+1.  Send and merge a PR bumping the version number according to the Haskell
+    PVP, as well as adding a new [`CHANGELOG.md`](./CHANGELOG.md) entry.
+
+2.  Go to the GitHub [Releases](https://github.com/cdepillabout/cloudy/releases)
+    page and click "Draft a new release".
+
+3.  In the "Choose a tag" drop-down, create a new tag with the format
+    `v1.2.3.4` with the newly-bumped version number.  Use this same tag as the title.
+    Copy and paste the new CHANGELOG entries to the release notes.
+    Click "Publish release".
+
+    This also creates a new Git tag, which you can fetch locally with a command like
+    `git fetch --tags`.
+
+4.  Upon publishing the release, a GitHub Action should run that builds and
+    uploads a statically-linked `cloudy` binary as a Release Asset.
+
+5.  Upload the new version of Cloudy to Hackage with a command like
+    `stack upload .`
 
 ## WARNING
 
