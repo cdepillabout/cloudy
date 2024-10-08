@@ -75,6 +75,9 @@ in
     final.lib.pipe
       final.cloudy
       [
+        # The code-path that generates the optparse-applicative completions uses
+        # the HOME directory, so that must be set in order to generate completions.
+        # https://github.com/cdepillabout/cloudy/issues/10
         ( final.haskell.lib.compose.overrideCabal (oldAttrs: {
             postInstall = ''
                 export HOME=$TMPDIR
